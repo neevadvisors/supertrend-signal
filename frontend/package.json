@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "copy-plotly": "cp node_modules/plotly.js-dist-min/plotly.min.js public/plotly.min.js",
+    "predev": "npm run copy-plotly",
+    "prebuild": "npm run copy-plotly",
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",

@@ -58,9 +58,9 @@ export function ResultsTable({ results }: ResultsTableProps) {
                 <TableHead>Close</TableHead>
                 <TableHead>ST</TableHead>
                 <TableHead>Bars since flip</TableHead>
-                <TableHead>Regime</TableHead>
-                <TableHead>Bar time</TableHead>
-                <TableHead>Error</TableHead>
+                <TableHead className="hidden md:table-cell">Regime</TableHead>
+                <TableHead className="hidden md:table-cell">Bar time</TableHead>
+                <TableHead className="hidden md:table-cell">Error</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -76,11 +76,13 @@ export function ResultsTable({ results }: ResultsTableProps) {
                       ? String(row.bars_since_flip)
                       : "—"}
                   </TableCell>
-                  <TableCell>{row.regime ?? "—"}</TableCell>
-                  <TableCell className="whitespace-nowrap">
+                  <TableCell className="hidden md:table-cell">
+                    {row.regime ?? "—"}
+                  </TableCell>
+                  <TableCell className="hidden whitespace-nowrap md:table-cell">
                     {row.bar_time ?? "—"}
                   </TableCell>
-                  <TableCell className="max-w-[220px] truncate text-[var(--ds-sell)]">
+                  <TableCell className="hidden max-w-[220px] truncate text-[var(--ds-sell)] md:table-cell">
                     {row.error || ""}
                   </TableCell>
                 </TableRow>

@@ -3,17 +3,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function DashboardSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <Skeleton className="h-[72px] w-full rounded-lg" />
+      <div className="flex gap-2 overflow-hidden">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 rounded-xl" />
+          <Skeleton key={i} className="h-9 w-24 shrink-0 rounded-lg" />
         ))}
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-36 rounded-xl" />
-        ))}
-      </div>
-      <Skeleton className="h-[420px] w-full rounded-xl" />
+      <Skeleton className="h-16 w-full rounded-lg" />
+      <Skeleton className="h-[300px] w-full rounded-xl md:h-[460px]" />
     </div>
   );
 }
@@ -22,7 +19,7 @@ export function InstrumentsSkeleton() {
   return (
     <div className="space-y-2">
       <Skeleton className="h-4 w-40" />
-      <Skeleton className="h-9 w-full" />
+      <Skeleton className="h-10 w-full" />
     </div>
   );
 }

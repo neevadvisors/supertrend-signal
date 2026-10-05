@@ -268,6 +268,96 @@
   align-items: center;
 }
 
+.ds-stock-card-compact {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: var(--ds-text);
+  font-size: 0.78rem;
+}
+
+.ds-stock-card-compact.is-error {
+  border-color: var(--ds-sell);
+}
+
+.ds-compact-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+
+.ds-compact-title {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.ds-symbol-compact {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.ds-name-compact {
+  font-size: 0.72rem;
+  color: var(--ds-muted);
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-compact-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.ds-badge-compact,
+.ds-trend-compact {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ds-compact-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-text);
+}
+
+.ds-stat-label {
+  color: var(--ds-muted);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-right: 2px;
+}
+
+.ds-error-compact {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(248, 81, 73, 0.12);
+  color: var(--ds-sell);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 @media (max-width: 599px) {
   .ds-stock-grid {
     grid-template-columns: 1fr;

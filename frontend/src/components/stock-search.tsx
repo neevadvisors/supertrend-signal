@@ -1,24 +1,23 @@
-import { useEffect, useState } from "react";
-import { CheckIcon, ChevronsUpDownIcon, XIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CheckIcon, SearchIcon } from "lucide-react";
 import { cn } from "cn";
-import { Badge } from "@/components/ui/badge";
 import {
   Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { Popover, PopoverContent } from "@/components/ui/popover";
 import { searchInstruments } from "@/lib/api";
 import type { Instrument } from "@/lib/schemas";
 
-type StockMultiselectProps = {
+type StockSearchProps = {
   selected: Instrument[];
   onChange: (next: Instrument[]) => void;
   disabled?: boolean;
@@ -27,21 +26,23 @@ type StockMultiselectProps = {
 const SEARCH_LIMIT = 50;
 const DEBOUNCE_MS = 200;
 
-export function StockMultiselect({
+export function StockSearch({
   selected,
   onChange,
   disabled,
-}: StockMultiselectProps) {
-  const [open, setOpen] = useState(false);
+}: StockSearchProps) {
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [listOpen, setListOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Instrument[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
+  const trimmed = query.trim();
+  const popoverOpen = listOpen && trimmed.length > 0;
 
-    const trimmed = query.trim();
+  useEffect(() => {
     if (!trimmed) {
       setResults([]);
       setSearching(false);
@@ -74,7 +75,7 @@ export function StockMultiselect({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [query, open]);
+  }, [trimmed]);
 
   function toggle(inst: Instrument) {
     const exists = selected.some((s) => s.security_id === inst.security_id);
@@ -83,10 +84,9 @@ export function StockMultiselect({
     } else {
       onChange([...selected, inst]);
     }
-  }
-
-  function remove(securityId: string) {
-    onChange(selected.filter((s) => s.security_id !== securityId));
+    setQuery("");
+    setListOpen(false);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   const selectedIds = new Set(selected.map((s) => s.security_id));
@@ -94,44 +94,53 @@ export function StockMultiselect({
   let emptyMessage = "Type to search NSE equities…";
   if (searchError) emptyMessage = searchError;
   else if (searching) emptyMessage = "Searching…";
-  else if (query.trim()) emptyMessage = "No stocks found.";
+  else if (trimmed) emptyMessage = "No stocks found.";
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       <label className="text-sm font-medium text-[var(--ds-text)]">
-        Search and select stocks
+        Search stocks
       </label>
       <Popover
-        open={open}
+        open={popoverOpen}
+        modal={false}
         onOpenChange={(next) => {
-          setOpen(next);
-          if (!next) {
-            setQuery("");
-            setResults([]);
-            setSearchError(null);
-          }
+          if (!trimmed && next) return;
+          setListOpen(next);
         }}
       >
-        <PopoverTrigger
-          disabled={disabled}
-          className={cn(
-            "flex h-auto min-h-9 w-full items-center justify-between rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
-          )}
-        >
-          <span className="truncate text-left text-[var(--ds-muted)]">
-            {selected.length === 0
-              ? "e.g. RELIANCE, HDFCBANK, TCS"
-              : `${selected.length} selected`}
-          </span>
-          <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
-        </PopoverTrigger>
-        <PopoverContent className="w-[min(100vw-2rem,32rem)] p-0" align="start">
-          <Command shouldFilter={false}>
-            <CommandInput
-              placeholder="Type to search NSE equities…"
+        <div ref={anchorRef} className="w-full">
+          <InputGroup className="h-10">
+            <InputGroupAddon align="inline-start">
+              <SearchIcon />
+            </InputGroupAddon>
+            <InputGroupInput
+              ref={inputRef}
+              disabled={disabled}
+              placeholder="e.g. RELIANCE, HDFCBANK, TCS"
               value={query}
-              onValueChange={setQuery}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setListOpen(true);
+              }}
+              onFocus={() => {
+                if (trimmed) setListOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setListOpen(false);
+                }
+              }}
             />
+          </InputGroup>
+        </div>
+        <PopoverContent
+          anchor={anchorRef}
+          initialFocus={false}
+          className="w-[var(--anchor-width)] min-w-[min(100vw-2rem,32rem)] p-0"
+          align="start"
+        >
+          <Command shouldFilter={false}>
             <CommandList>
               <CommandEmpty>{emptyMessage}</CommandEmpty>
               <CommandGroup>
@@ -159,28 +168,6 @@ export function StockMultiselect({
           </Command>
         </PopoverContent>
       </Popover>
-
-      {selected.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {selected.map((inst) => (
-            <Badge
-              key={inst.security_id}
-              variant="secondary"
-              className="max-w-full gap-1 pr-1"
-            >
-              <span className="truncate">{inst.label}</span>
-              <button
-                type="button"
-                className="rounded p-0.5 hover:bg-muted"
-                aria-label={`Remove ${inst.label}`}
-                onClick={() => remove(inst.security_id)}
-              >
-                <XIcon className="size-3" />
-              </button>
-            </Badge>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

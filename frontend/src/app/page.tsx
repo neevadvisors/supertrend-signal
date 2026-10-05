@@ -1,18 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChartsPanel } from "@/components/charts-panel";
+import { DashboardHeader } from "@/components/dashboard-header";
 import { DashboardSkeleton } from "@/components/dashboard-skeleton";
-import { MetricsRow } from "@/components/metrics-row";
 import { ResultsTable } from "@/components/results-table";
-import { SettingsSidebar } from "@/components/settings-sidebar";
-import { StockCards } from "@/components/stock-cards";
-import { StockMultiselect } from "@/components/stock-multiselect";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SettingsDrawer } from "@/components/settings-drawer";
+import { StockSearch } from "@/components/stock-search";
 import {
   fetchMetaDefaults,
   postSignals,
@@ -21,12 +16,18 @@ import {
 import {
   DEFAULT_LOOKBACKS,
   DEFAULT_PARAMS,
+  instrumentSchema,
+  neevParamsSchema,
+  showBarsSchema,
+  timeframeSchema,
   type Instrument,
   type NeevParams,
   type ShowBars,
   type SignalResult,
   type Timeframe,
 } from "@/lib/schemas";
+
+const STORAGE_KEY = "ds:dashboard";
 
 function settingsFingerprint(
   params: NeevParams,
@@ -51,12 +52,57 @@ function selectionKey(items: Instrument[]): string {
   return items.map((i) => i.security_id).join(",");
 }
 
+function loadPersistedDashboard(): {
+  selected: Instrument[];
+  params: NeevParams;
+  timeframe: Timeframe;
+  lookbackDays: number;
+  showBars: ShowBars;
+} | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as unknown;
+    if (!data || typeof data !== "object") return null;
+    const record = data as Record<string, unknown>;
+    const selectedParsed = instrumentSchema.array().safeParse(record.selected);
+    const paramsParsed = neevParamsSchema.safeParse(record.params);
+    const timeframeParsed = timeframeSchema.safeParse(record.timeframe);
+    const showBarsParsed = showBarsSchema.safeParse(record.showBars);
+    const lookback =
+      typeof record.lookbackDays === "number" ? record.lookbackDays : null;
+    if (
+      !selectedParsed.success ||
+      !paramsParsed.success ||
+      !timeframeParsed.success ||
+      !showBarsParsed.success ||
+      lookback == null ||
+      !Number.isFinite(lookback)
+    ) {
+      return null;
+    }
+    return {
+      selected: selectedParsed.data,
+      params: paramsParsed.data,
+      timeframe: timeframeParsed.data,
+      lookbackDays: Math.min(365, Math.max(5, Math.round(lookback))),
+      showBars: showBarsParsed.data,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [params, setParams] = useState<NeevParams>(DEFAULT_PARAMS);
+  const [defaultParams, setDefaultParams] = useState<NeevParams>(DEFAULT_PARAMS);
   const [timeframe, setTimeframe] = useState<Timeframe>("15m");
   const [lookbackDays, setLookbackDays] = useState(30);
   const [lookbacks, setLookbacks] =
+    useState<Record<Timeframe, number>>(DEFAULT_LOOKBACKS);
+  const [defaultLookbacks, setDefaultLookbacks] =
     useState<Record<Timeframe, number>>(DEFAULT_LOOKBACKS);
   const [showBars, setShowBars] = useState<ShowBars>(120);
   const [selected, setSelected] = useState<Instrument[]>([]);
@@ -67,6 +113,9 @@ export default function HomePage() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [instrumentsError, setInstrumentsError] = useState<string | null>(null);
   const [signalsError, setSignalsError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const persistenceApplied = useRef(false);
 
   const fingerprint = settingsFingerprint(
     params,
@@ -86,12 +135,14 @@ export default function HomePage() {
         const meta = await fetchMetaDefaults();
         if (cancelled) return;
         setParams(meta.params);
+        setDefaultParams(meta.params);
         const nextLookbacks: Record<Timeframe, number> = {
           "15m": meta.lookbacks["15m"] ?? DEFAULT_LOOKBACKS["15m"],
           "1h": meta.lookbacks["1h"] ?? DEFAULT_LOOKBACKS["1h"],
           "4h": meta.lookbacks["4h"] ?? DEFAULT_LOOKBACKS["4h"],
         };
         setLookbacks(nextLookbacks);
+        setDefaultLookbacks(nextLookbacks);
         setLookbackDays(nextLookbacks["15m"]);
       } catch (err) {
         if (cancelled) return;
@@ -108,6 +159,41 @@ export default function HomePage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (bootLoading || persistenceApplied.current) return;
+    persistenceApplied.current = true;
+    const saved = loadPersistedDashboard();
+    if (!saved) return;
+    setSelected(saved.selected);
+    setParams(saved.params);
+    setTimeframe(saved.timeframe);
+    setLookbackDays(saved.lookbackDays);
+    setShowBars(saved.showBars);
+  }, [bootLoading]);
+
+  useEffect(() => {
+    if (bootLoading) return;
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          selected,
+          params,
+          timeframe,
+          lookbackDays,
+          showBars,
+        })
+      );
+    } catch {
+      /* ignore quota / private mode */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- persist when selection or settings fingerprint changes
+  }, [bootLoading, currentSelectionKey, fingerprint]); // values read from closure when keys change
+
+  useEffect(() => {
+    setLookbacks((prev) => ({ ...prev, [timeframe]: lookbackDays }));
+  }, [timeframe, lookbackDays]);
 
   useEffect(() => {
     if (selected.length === 0) {
@@ -142,6 +228,7 @@ export default function HomePage() {
         });
         if (cancelled) return;
         setResults(response.results);
+        setLastUpdated(new Date());
       } catch (err) {
         if (cancelled) return;
         setSignalsError(
@@ -195,6 +282,7 @@ export default function HomePage() {
         show_bars: showBars,
       });
       setResults(response.results);
+      setLastUpdated(new Date());
     } catch (err) {
       setSignalsError(
         err instanceof Error ? err.message : "Failed to compute signals"
@@ -204,89 +292,51 @@ export default function HomePage() {
     }
   }
 
+  function handleResetToDefaults() {
+    setParams(defaultParams);
+    setTimeframe("15m");
+    setLookbacks(defaultLookbacks);
+    setLookbackDays(defaultLookbacks["15m"]);
+    setShowBars(120);
+  }
+
+  function handleRemoveStock(securityId: string) {
+    setSelected((prev) => prev.filter((s) => s.security_id !== securityId));
+  }
+
+  function handleLogout() {
+    void (async () => {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.push("/login");
+      router.refresh();
+    })();
+  }
+
+  const showResultsSection = selected.length > 0 && results != null;
+
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--ds-bg)] text-[var(--ds-text)] md:flex-row">
-      <SettingsSidebar
+    <div className="min-h-screen bg-[var(--ds-bg)] text-[var(--ds-text)]">
+      <SettingsDrawer
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
         params={params}
         onParamsChange={setParams}
         onRefreshInstruments={() => void handleRefreshInstruments()}
+        onResetToDefaults={handleResetToDefaults}
         instrumentsLoading={instrumentsRefreshing}
       />
 
-      <main className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Dhan Signals</h1>
-            <p className="mt-1 text-sm text-[var(--ds-muted)]">
-              NEEV AI Renko Supertrend — 15m, 1h, 4h
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void (async () => {
-                await fetch("/api/auth/logout", { method: "POST" });
-                router.push("/login");
-                router.refresh();
-              })();
-            }}
-          >
-            Log out
-          </Button>
-        </header>
+      <main className="mx-auto max-w-6xl space-y-4 p-4 md:space-y-5 md:p-6 lg:p-8">
+        <DashboardHeader
+          lastUpdated={lastUpdated}
+          signalsLoading={signalsLoading}
+          refreshDisabled={selected.length === 0}
+          onRefreshMarket={() => void handleForceMarketRefresh()}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onLogout={handleLogout}
+        />
 
-        <div className="grid gap-4 lg:grid-cols-[2fr_3fr]">
-          <div className="space-y-2">
-            <Label>Timeframe</Label>
-            <Tabs
-              value={timeframe}
-              onValueChange={(value) => {
-                const next = String(value) as Timeframe;
-                if (next !== "15m" && next !== "1h" && next !== "4h") return;
-                if (next !== timeframe) {
-                  setLookbackDays(lookbacks[next] ?? DEFAULT_LOOKBACKS[next]);
-                }
-                setTimeframe(next);
-              }}
-            >
-              <TabsList className="w-full">
-                <TabsTrigger value="15m" className="flex-1">
-                  15m
-                </TabsTrigger>
-                <TabsTrigger value="1h" className="flex-1">
-                  1h
-                </TabsTrigger>
-                <TabsTrigger value="4h" className="flex-1">
-                  4h
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="lookback">Lookback (days)</Label>
-              <span className="font-mono text-xs text-[var(--ds-muted)]">
-                {lookbackDays}
-              </span>
-            </div>
-            <Slider
-              id="lookback"
-              min={5}
-              max={365}
-              step={1}
-              value={[lookbackDays]}
-              onValueChange={(v) => {
-                const next = Array.isArray(v) ? v[0] : v;
-                if (typeof next === "number") setLookbackDays(next);
-              }}
-            />
-          </div>
-        </div>
-
-        <StockMultiselect
+        <StockSearch
           selected={selected}
           onChange={setSelected}
           disabled={bootLoading}
@@ -304,41 +354,9 @@ export default function HomePage() {
           </div>
         ) : null}
 
-        <div className="space-y-2">
-          <Label>Bars on chart</Label>
-          <Tabs
-            value={String(showBars)}
-            onValueChange={(value) => {
-              const n = Number(value);
-              if (n === 60 || n === 120 || n === 250) setShowBars(n);
-            }}
-          >
-            <TabsList>
-              <TabsTrigger value="60">60</TabsTrigger>
-              <TabsTrigger value="120">120</TabsTrigger>
-              <TabsTrigger value="250">250</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={selected.length === 0 || signalsLoading}
-            onClick={() => void handleForceMarketRefresh()}
-          >
-            {signalsLoading ? "Updating…" : "Refresh market data"}
-          </Button>
-          <p className="text-xs text-[var(--ds-muted)]">
-            Signals update automatically when you change stocks or settings.
-            Candle data is cached ~15 minutes — not live ticks.
-          </p>
-        </div>
-
         {selected.length === 0 ? (
-          <p className="text-sm text-[var(--ds-muted)]">
-            Select one or more stocks to compute signals.
+          <p className="py-8 text-center text-sm text-[var(--ds-muted)]">
+            Select stocks to compute signals — try RELIANCE, HDFCBANK, or TCS.
           </p>
         ) : null}
 
@@ -348,16 +366,25 @@ export default function HomePage() {
           </div>
         ) : null}
 
-        {signalsLoading ? <DashboardSkeleton /> : null}
+        {signalsLoading && !results ? <DashboardSkeleton /> : null}
 
-        {!signalsLoading && results ? (
-          <div className="space-y-6">
-            <MetricsRow results={results} />
-            <StockCards results={results} />
+        {showResultsSection ? (
+          <div
+            className={
+              signalsLoading ? "space-y-4 opacity-60 transition-opacity" : "space-y-4"
+            }
+          >
             <ChartsPanel
+              selected={selected}
               results={results}
               showBars={showBars}
               timeframe={timeframe}
+              lookbackDays={lookbackDays}
+              lookbacks={lookbacks}
+              onTimeframeChange={setTimeframe}
+              onLookbackChange={setLookbackDays}
+              onShowBarsChange={setShowBars}
+              onRemove={handleRemoveStock}
             />
             <ResultsTable results={results} />
           </div>

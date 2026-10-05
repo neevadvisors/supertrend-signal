@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { useMediaQuery } from "@/hooks/use-media-query";
+import { loadPlotly } from "@/lib/load-plotly";
 import type { ChartBar, Timeframe } from "@/lib/schemas";
 import { buildSupertrendFigure } from "@/lib/supertrend-figure";
 
@@ -16,6 +18,8 @@ export function SupertrendChart({
   timeframe,
 }: SupertrendChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const isDesktop = useMediaQuery("(min-width: 768px)");
+  const chartHeight = isDesktop ? 460 : 300;
 
   useEffect(() => {
     const el = containerRef.current;
@@ -24,13 +28,14 @@ export function SupertrendChart({
     let cancelled = false;
 
     async function render() {
-      const Plotly = (await import("plotly.js-dist-min")).default;
+      const Plotly = await loadPlotly();
       if (cancelled || !el) return;
       const { data, layout, config } = buildSupertrendFigure(
         frame,
         symbol,
         showBars,
-        timeframe
+        timeframe,
+        chartHeight
       );
       await Plotly.react(el, data, layout, config);
     }
@@ -39,17 +44,17 @@ export function SupertrendChart({
 
     return () => {
       cancelled = true;
-      void import("plotly.js-dist-min").then(({ default: Plotly }) => {
+      void loadPlotly().then((Plotly) => {
         Plotly.purge(el);
       });
     };
-  }, [frame, symbol, showBars, timeframe]);
+  }, [frame, symbol, showBars, timeframe, chartHeight]);
 
   return (
     <div
       ref={containerRef}
       className="w-full overflow-hidden rounded-xl border border-[var(--ds-border)] bg-[var(--ds-bg)]"
-      style={{ minHeight: 420 }}
+      style={{ minHeight: chartHeight }}
     />
   );
 }

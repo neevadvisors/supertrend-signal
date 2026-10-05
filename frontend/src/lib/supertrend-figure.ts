@@ -34,14 +34,34 @@ function isBull(trend: ChartBar["trend"]): boolean {
   return true;
 }
 
-function emptyFigure(symbol: string): { data: Data[]; layout: Partial<Layout> } {
+function chartLayoutMetrics(chartHeight: number): {
+  height: number;
+  margin: { l: number; r: number; t: number; b: number };
+  titleSize: number;
+} {
+  const compact = chartHeight <= 320;
+  return {
+    height: chartHeight,
+    margin: compact
+      ? { l: 40, r: 16, t: 56, b: 32 }
+      : { l: 48, r: 24, t: 72, b: 40 },
+    titleSize: compact ? 14 : 16,
+  };
+}
+
+function emptyFigure(
+  symbol: string,
+  chartHeight: number
+): { data: Data[]; layout: Partial<Layout> } {
+  const { height, margin, titleSize } = chartLayoutMetrics(chartHeight);
   return {
     data: [],
     layout: {
-      title: { text: `${symbol} — no data`, font: { color: TEXT } },
+      title: { text: `${symbol} — no data`, font: { color: TEXT, size: titleSize } },
       paper_bgcolor: PAPER_BG,
       plot_bgcolor: PLOT_BG,
-      height: 420,
+      height,
+      margin,
       font: { color: TEXT },
     },
   };
@@ -115,7 +135,8 @@ export function buildSupertrendFigure(
   frame: ChartBar[] | null | undefined,
   symbol: string,
   showBars: number,
-  timeframe: Timeframe
+  timeframe: Timeframe,
+  chartHeight = 420
 ): { data: Data[]; layout: Partial<Layout>; config: Partial<Config> } {
   const config: Partial<Config> = {
     displayModeBar: false,
@@ -125,7 +146,7 @@ export function buildSupertrendFigure(
   };
 
   if (!frame || frame.length === 0) {
-    const empty = emptyFigure(symbol);
+    const empty = emptyFigure(symbol, chartHeight);
     return { ...empty, config };
   }
 
@@ -164,7 +185,7 @@ export function buildSupertrendFigure(
 
   const df = cleaned.slice(-showBars);
   if (df.length === 0) {
-    const empty = emptyFigure(symbol);
+    const empty = emptyFigure(symbol, chartHeight);
     return { ...empty, config };
   }
 
@@ -225,18 +246,20 @@ export function buildSupertrendFigure(
     });
   }
 
+  const { height, margin, titleSize } = chartLayoutMetrics(chartHeight);
+
   const layout: Partial<Layout> = {
     title: {
       text: `${symbol} — Supertrend (${timeframe})`,
-      font: { size: 16, color: TEXT },
+      font: { size: titleSize, color: TEXT },
       x: 0,
       xanchor: "left",
     },
     paper_bgcolor: PAPER_BG,
     plot_bgcolor: PLOT_BG,
     font: { color: TEXT, size: 12 },
-    height: 420,
-    margin: { l: 48, r: 24, t: 72, b: 40 },
+    height,
+    margin,
     dragmode: "pan",
     hovermode: "x unified",
     legend: {
