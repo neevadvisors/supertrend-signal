@@ -1,0 +1,13 @@
+{
+  "name": "dhan-signals",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c cyan,magenta \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": ".venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --app-dir backend",
+    "dev:web": "npm run dev --prefix frontend",
+    "install:all": "pip install -r backend/requirements.txt && npm install --prefix frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

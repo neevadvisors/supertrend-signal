@@ -1,0 +1,6 @@
+dhanhq
+pandas
+python-dotenv
+fastapi
+uvicorn[standard]
+pydantic
