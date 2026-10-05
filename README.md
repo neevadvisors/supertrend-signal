@@ -59,6 +59,9 @@ npm run dev:web   # frontend only
 | `backend/.env` or root `.env` | `DHAN_ACCESS_TOKEN` | Dhan API access token |
 | `backend/.env` or root `.env` | `CORS_ORIGINS` | Comma-separated allowed origins (default `http://localhost:3000`) |
 | `frontend/.env.local` | `NEXT_PUBLIC_API_URL` | Backend base URL (default `http://localhost:8000`) |
+| `frontend/.env.local` | `AUTH_USERNAME` | Login username (server-only) |
+| `frontend/.env.local` | `AUTH_PASSWORD` | Login password (server-only) |
+| `frontend/.env.local` | `AUTH_SECRET` | Secret for signing session cookies (server-only) |
 
 ## Deploy
 
@@ -76,6 +79,7 @@ Set env vars in the Render dashboard:
 
 - **Root Directory:** `frontend`
 - **Env:** `NEXT_PUBLIC_API_URL` = your Render API URL (no trailing slash)
+- **Env:** `AUTH_USERNAME`, `AUTH_PASSWORD`, `AUTH_SECRET` (server-only login gate)
 
 ## Timeframes
 

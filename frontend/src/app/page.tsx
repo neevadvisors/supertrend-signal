@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ChartsPanel } from "@/components/charts-panel";
 import { DashboardSkeleton } from "@/components/dashboard-skeleton";
@@ -30,7 +31,8 @@ import {
 function settingsFingerprint(
   params: NeevParams,
   timeframe: Timeframe,
-  lookbackDays: number
+  lookbackDays: number,
+  showBars: ShowBars
 ): string {
   return [
     params.atr_len,
@@ -41,6 +43,7 @@ function settingsFingerprint(
     params.adx_thresh,
     timeframe,
     lookbackDays,
+    showBars,
   ].join("|");
 }
 
@@ -49,6 +52,7 @@ function selectionKey(items: Instrument[]): string {
 }
 
 export default function HomePage() {
+  const router = useRouter();
   const [params, setParams] = useState<NeevParams>(DEFAULT_PARAMS);
   const [timeframe, setTimeframe] = useState<Timeframe>("15m");
   const [lookbackDays, setLookbackDays] = useState(30);
@@ -57,10 +61,6 @@ export default function HomePage() {
   const [showBars, setShowBars] = useState<ShowBars>(120);
   const [selected, setSelected] = useState<Instrument[]>([]);
   const [results, setResults] = useState<SignalResult[] | null>(null);
-  const [resultSelectionKey, setResultSelectionKey] = useState<string | null>(
-    null
-  );
-  const [lastSettings, setLastSettings] = useState<string | null>(null);
   const [bootLoading, setBootLoading] = useState(true);
   const [instrumentsRefreshing, setInstrumentsRefreshing] = useState(false);
   const [signalsLoading, setSignalsLoading] = useState(false);
@@ -68,7 +68,13 @@ export default function HomePage() {
   const [instrumentsError, setInstrumentsError] = useState<string | null>(null);
   const [signalsError, setSignalsError] = useState<string | null>(null);
 
-  const fingerprint = settingsFingerprint(params, timeframe, lookbackDays);
+  const fingerprint = settingsFingerprint(
+    params,
+    timeframe,
+    lookbackDays,
+    showBars
+  );
+  const currentSelectionKey = selectionKey(selected);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,13 +110,16 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!results || selected.length === 0) return;
-    if (lastSettings === null) return;
-    if (fingerprint === lastSettings) return;
+    if (selected.length === 0) {
+      setResults(null);
+      setSignalsError(null);
+      setSignalsLoading(false);
+      return;
+    }
 
     let cancelled = false;
 
-    async function recompute() {
+    async function compute() {
       setSignalsLoading(true);
       setSignalsError(null);
       try {
@@ -133,8 +142,6 @@ export default function HomePage() {
         });
         if (cancelled) return;
         setResults(response.results);
-        setResultSelectionKey(selectionKey(selected));
-        setLastSettings(fingerprint);
       } catch (err) {
         if (cancelled) return;
         setSignalsError(
@@ -145,12 +152,12 @@ export default function HomePage() {
       }
     }
 
-    void recompute();
+    void compute();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mirror Streamlit fingerprint recompute; keep deps primitive
-  }, [fingerprint]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- drive off primitive keys only
+  }, [currentSelectionKey, fingerprint]);
 
   async function handleRefreshInstruments() {
     setInstrumentsRefreshing(true);
@@ -166,7 +173,7 @@ export default function HomePage() {
     }
   }
 
-  async function handleRefreshSignals() {
+  async function handleForceMarketRefresh() {
     if (selected.length === 0) return;
     setSignalsLoading(true);
     setSignalsError(null);
@@ -178,7 +185,6 @@ export default function HomePage() {
         exchange_segment: inst.exchange_segment,
         instrument_type: inst.instrument_type,
       }));
-
       const response = await postSignals({
         securities,
         timeframe,
@@ -189,8 +195,6 @@ export default function HomePage() {
         show_bars: showBars,
       });
       setResults(response.results);
-      setResultSelectionKey(selectionKey(selected));
-      setLastSettings(fingerprint);
     } catch (err) {
       setSignalsError(
         err instanceof Error ? err.message : "Failed to compute signals"
@@ -199,12 +203,6 @@ export default function HomePage() {
       setSignalsLoading(false);
     }
   }
-
-  const currentSelectionKey = selectionKey(selected);
-  const selectionChanged =
-    results !== null &&
-    resultSelectionKey !== null &&
-    currentSelectionKey !== resultSelectionKey;
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--ds-bg)] text-[var(--ds-text)] md:flex-row">
@@ -216,11 +214,27 @@ export default function HomePage() {
       />
 
       <main className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">
-        <header>
-          <h1 className="text-3xl font-semibold tracking-tight">Dhan Signals</h1>
-          <p className="mt-1 text-sm text-[var(--ds-muted)]">
-            NEEV AI Renko Supertrend — 15m, 1h, 4h
-          </p>
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">Dhan Signals</h1>
+            <p className="mt-1 text-sm text-[var(--ds-muted)]">
+              NEEV AI Renko Supertrend — 15m, 1h, 4h
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void (async () => {
+                await fetch("/api/auth/logout", { method: "POST" });
+                router.push("/login");
+                router.refresh();
+              })();
+            }}
+          >
+            Log out
+          </Button>
         </header>
 
         <div className="grid gap-4 lg:grid-cols-[2fr_3fr]">
@@ -307,33 +321,25 @@ export default function HomePage() {
           </Tabs>
         </div>
 
-        <Button
-          type="button"
-          disabled={selected.length === 0 || signalsLoading}
-          onClick={() => void handleRefreshSignals()}
-        >
-          {signalsLoading ? "Refreshing…" : "Refresh signals"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={selected.length === 0 || signalsLoading}
+            onClick={() => void handleForceMarketRefresh()}
+          >
+            {signalsLoading ? "Updating…" : "Refresh market data"}
+          </Button>
+          <p className="text-xs text-[var(--ds-muted)]">
+            Signals update automatically when you change stocks or settings.
+            Candle data is cached ~15 minutes — not live ticks.
+          </p>
+        </div>
 
         {selected.length === 0 ? (
           <p className="text-sm text-[var(--ds-muted)]">
-            Select one or more stocks, then click{" "}
-            <strong>Refresh signals</strong>.
+            Select one or more stocks to compute signals.
           </p>
-        ) : null}
-
-        {selected.length > 0 && results === null && !signalsLoading ? (
-          <p className="text-sm text-[var(--ds-muted)]">
-            {selected.length} stock(s) selected. Click{" "}
-            <strong>Refresh signals</strong> to compute.
-          </p>
-        ) : null}
-
-        {selectionChanged ? (
-          <div className="rounded-lg border border-[var(--ds-hold)] bg-[rgba(210,153,34,0.12)] px-3 py-2 text-sm text-[var(--ds-hold)]">
-            Selection changed — click <strong>Refresh signals</strong> to
-            update.
-          </div>
         ) : null}
 
         {signalsError ? (
