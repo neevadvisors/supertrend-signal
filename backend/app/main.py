@@ -20,6 +20,7 @@ load_dotenv(BACKEND_ROOT.parent / ".env")
 
 from app.api import health, instruments, meta, signals  # noqa: E402
 from src.instruments import load_nse_equity_instruments  # noqa: E402
+from src.token_manager import get_valid_access_token  # noqa: E402
 
 app = FastAPI(title="Dhan Signals API", version="1.0.0")
 
@@ -31,6 +32,11 @@ def _warm_instrument_cache() -> None:
         load_nse_equity_instruments()
     except Exception:
         # Search endpoint will surface errors when first used.
+        pass
+    try:
+        get_valid_access_token()
+    except Exception:
+        # Dhan endpoints will surface auth errors when first used.
         pass
 
 _cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000")

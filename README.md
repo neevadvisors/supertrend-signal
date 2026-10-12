@@ -29,7 +29,7 @@ npm run install:all            # backend pip + frontend npm
 cp backend/.env.example backend/.env   # or use root .env
 ```
 
-Edit `backend/.env` (or root `.env`) with your Dhan Client ID and Access Token from the [DhanHQ developer portal](https://dhanhq.co/). The API loads `backend/.env` first, then the parent repo `.env`.
+Edit `backend/.env` (or root `.env`) with your Dhan Client ID, PIN, and TOTP secret (enable TOTP under **Access DhanHQ APIs** on [web.dhan.co](https://web.dhan.co)). The API mints and refreshes access tokens automatically. The API loads `backend/.env` first, then the parent repo `.env`.
 
 ### Run both (recommended)
 
@@ -56,7 +56,9 @@ npm run dev:web   # frontend only
 | Location | Variable | Purpose |
 |----------|----------|---------|
 | `backend/.env` or root `.env` | `DHAN_CLIENT_ID` | Dhan API client id |
-| `backend/.env` or root `.env` | `DHAN_ACCESS_TOKEN` | Dhan API access token |
+| `backend/.env` or root `.env` | `DHAN_PIN` | 6-digit Dhan PIN (TOTP mint) |
+| `backend/.env` or root `.env` | `DHAN_TOTP_SECRET` | TOTP secret from Dhan Web setup |
+| `backend/.env` or root `.env` | `DHAN_ACCESS_TOKEN` | Optional bootstrap JWT until first auto-mint |
 | `backend/.env` or root `.env` | `CORS_ORIGINS` | Comma-separated allowed origins (default `http://localhost:3000`) |
 | `frontend/.env.local` | `NEXT_PUBLIC_API_URL` | Backend base URL (default `http://localhost:8000`) |
 | `frontend/.env.local` | `AUTH_USERNAME` | Login username (server-only) |
@@ -72,7 +74,9 @@ npm run dev:web   # frontend only
 Set env vars in the Render dashboard:
 
 - `DHAN_CLIENT_ID`
-- `DHAN_ACCESS_TOKEN`
+- `DHAN_PIN`
+- `DHAN_TOTP_SECRET`
+- `DHAN_ACCESS_TOKEN` (optional bootstrap)
 - `CORS_ORIGINS` — your Vercel frontend origin(s), e.g. `https://your-app.vercel.app`
 
 ### Frontend — Vercel

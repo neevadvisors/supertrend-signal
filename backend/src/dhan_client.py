@@ -13,6 +13,8 @@ from dhanhq import DhanContext, dhanhq
 
 from pathlib import Path
 
+from src.token_manager import get_valid_access_token
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 Timeframe = Literal["15m", "1h", "4h"]
@@ -40,12 +42,11 @@ def load_credentials() -> tuple[str, str]:
     load_dotenv(PROJECT_ROOT / ".env")
     load_dotenv(PROJECT_ROOT.parent / ".env")
     client_id = os.getenv("DHAN_CLIENT_ID", "").strip()
-    access_token = os.getenv("DHAN_ACCESS_TOKEN", "").strip()
-    if not client_id or not access_token:
+    if not client_id:
         raise RuntimeError(
-            "Missing DHAN_CLIENT_ID or DHAN_ACCESS_TOKEN. "
-            "Copy .env.example to .env and fill in your credentials."
+            "Missing DHAN_CLIENT_ID. Copy .env.example to .env and fill in your credentials."
         )
+    access_token = get_valid_access_token()
     return client_id, access_token
 
 
