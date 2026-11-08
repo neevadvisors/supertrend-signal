@@ -1,0 +1,41 @@
+{
+  "refreshed_at": "2026-11-07",
+  "indices": [
+    {
+      "id": "nifty50",
+      "name": "NIFTY 50",
+      "market": "IN",
+      "tier": "Large cap",
+      "size": 50,
+      "blurb": "India's 50 largest listed companies by free-float market cap.",
+      "refreshed_at": "2026-11-07"
+    },
+    {
+      "id": "midcap150",
+      "name": "NIFTY Midcap 150",
+      "market": "IN",
+      "tier": "Mid cap",
+      "size": 150,
+      "blurb": "Companies ranked 101 to 250 by market cap.",
+      "refreshed_at": "2026-11-07"
+    },
+    {
+      "id": "smallcap250",
+      "name": "NIFTY Smallcap 250",
+      "market": "IN",
+      "tier": "Small cap",
+      "size": 250,
+      "blurb": "Companies ranked 251 to 500 by market cap.",
+      "refreshed_at": "2026-11-07"
+    },
+    {
+      "id": "niftynext50",
+      "name": "NIFTY Next 50",
+      "market": "IN",
+      "tier": "Large cap",
+      "size": 50,
+      "blurb": "The next 50 companies after NIFTY 50 by free-float market cap.",
+      "refreshed_at": "2026-11-07"
+    }
+  ]
+}

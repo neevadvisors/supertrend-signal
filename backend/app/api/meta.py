@@ -21,6 +21,7 @@ def get_defaults() -> MetaDefaultsResponse:
             "15m": default_lookback_for_timeframe("15m"),
             "1h": default_lookback_for_timeframe("1h"),
             "4h": default_lookback_for_timeframe("4h"),
+            "1d": default_lookback_for_timeframe("1d"),
         },
         params=NeevParamsSchema(
             atr_len=defaults.atr_len,

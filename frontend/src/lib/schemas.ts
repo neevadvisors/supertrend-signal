@@ -95,6 +95,87 @@ export const healthSchema = z.object({
   status: z.string(),
 });
 
+export const indexSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  market: z.string(),
+  tier: z.string(),
+  size: z.number().int(),
+  blurb: z.string(),
+  refreshed_at: z.string().nullable().optional(),
+});
+export type IndexSummary = z.infer<typeof indexSummarySchema>;
+
+export const indicesCatalogSchema = z.object({
+  refreshed_at: z.string().nullable().optional(),
+  indices: z.array(indexSummarySchema),
+});
+export type IndicesCatalog = z.infer<typeof indicesCatalogSchema>;
+
+export const unresolvedSymbolSchema = z.object({
+  symbol: z.string(),
+  reason: z.string(),
+});
+
+export const indexMembersSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  market: z.string(),
+  tier: z.string(),
+  size: z.number().int(),
+  blurb: z.string(),
+  refreshed_at: z.string().nullable().optional(),
+  members: z.array(instrumentSchema),
+  unresolved: z.array(unresolvedSymbolSchema),
+  resolved_count: z.number().int(),
+  unresolved_count: z.number().int(),
+});
+export type IndexMembers = z.infer<typeof indexMembersSchema>;
+
+export type TimeframeSignals = Record<Timeframe, string | undefined>;
+
+export type SignalCacheEntry = {
+  symbol: string;
+  signals: TimeframeSignals;
+  lastRun: string;
+};
+
+export const coverageStateSchema = z.object({
+  indexIds: z.array(z.string()),
+  manual: z.array(instrumentSchema),
+  indexAddedOn: z.record(z.string(), z.string()).optional(),
+  indexLastRun: z.record(z.string(), z.string()).optional(),
+});
+export type CoverageState = z.infer<typeof coverageStateSchema>;
+
+export const stocksSignalTfSchema = z.enum(["1h", "4h", "1d"]);
+export type StocksSignalTf = z.infer<typeof stocksSignalTfSchema>;
+
+export const coverageRowSchema = z.object({
+  security_id: z.string(),
+  symbol: z.string(),
+  display_name: z.string(),
+  exchange_segment: z.string(),
+  sources: z.array(z.string()),
+  manual: z.boolean(),
+  ltp: z.number().nullable().optional(),
+  change_pct: z.number().nullable().optional(),
+  signals: z.object({
+    "1h": z.string().nullable().optional(),
+    "4h": z.string().nullable().optional(),
+    "1d": z.string().nullable().optional(),
+  }),
+  error: z.string().nullable().optional(),
+  last_run_at: z.string().nullable().optional(),
+});
+export type CoverageRow = z.infer<typeof coverageRowSchema>;
+
+export const coverageRowsResponseSchema = z.object({
+  last_run_at: z.string().nullable().optional(),
+  rows: z.array(coverageRowSchema),
+});
+export type CoverageRowsResponse = z.infer<typeof coverageRowsResponseSchema>;
+
 export const DEFAULT_PARAMS: NeevParams = {
   atr_len: 14,
   base_factor: 3,

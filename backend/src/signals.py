@@ -17,7 +17,10 @@ from src.indicators import adx, atr
 IST = ZoneInfo("Asia/Kolkata")
 MIN_BARS = 100
 
-TimeframeMinutes = {"15m": 15, "1h": 60, "4h": 240}
+TimeframeMinutes = {"15m": 15, "1h": 60, "4h": 240, "1d": 1440}
+
+TARGET_RR = 2.5
+NONE_NOTE = "Price inside range. No trigger on this timeframe."
 
 
 @dataclass
@@ -56,7 +59,9 @@ def drop_forming_candle(
     else:
         ts = ts.tz_convert(IST)
 
-    if timeframe == "4h":
+    if timeframe == "1d":
+        bar_end = ts.normalize() + timedelta(days=1)
+    elif timeframe == "4h":
         minutes = ts.hour * 60 + ts.minute
         day = ts.normalize()
         if minutes >= 13 * 60 + 15:
@@ -254,6 +259,79 @@ def compute_neev_supertrend(
     out["regime"] = regime_out
     out["rc"] = rc_out
     return out
+
+
+def _build_signal_note(
+    signal: str,
+    trend_label: str | None,
+    regime: Any,
+    bars_since_flip: int | None,
+) -> str:
+    if signal in ("HOLD", "NONE"):
+        return NONE_NOTE
+    parts: list[str] = []
+    if trend_label:
+        parts.append(f"Trend {trend_label}")
+    if regime:
+        parts.append(f"Regime {regime}")
+    if bars_since_flip is not None and bars_since_flip == 0:
+        parts.append("Supertrend flip on this bar")
+    elif bars_since_flip is not None:
+        parts.append(f"{bars_since_flip} bars since prior flip")
+    if not parts:
+        parts.append("NEEV Supertrend trigger")
+    return "; ".join(parts) + "."
+
+
+def _derive_trade_levels(
+    signal: str,
+    entry: float | None,
+    stop: float | None,
+) -> tuple[float | None, float | None, float | None]:
+    if signal not in ("BUY", "SELL") or entry is None or stop is None:
+        return None, None, None
+    risk = abs(entry - stop)
+    if risk == 0:
+        return entry, None, stop
+    if signal == "BUY":
+        target = entry + TARGET_RR * risk
+    else:
+        target = entry - TARGET_RR * risk
+    return entry, target, stop
+
+
+def signal_snapshot_from_latest(
+    raw: dict[str, Any],
+    *,
+    timeframe: Timeframe,
+) -> dict[str, Any]:
+    """Map latest_signal output to persisted snapshot fields."""
+    signal = raw.get("signal") or "HOLD"
+    side = "NONE"
+    if signal == "BUY":
+        side = "BUY"
+    elif signal == "SELL":
+        side = "SELL"
+
+    entry_val, target_val, stop_val = _derive_trade_levels(
+        side if side != "NONE" else "HOLD",
+        raw.get("close"),
+        raw.get("st_level"),
+    )
+    note = _build_signal_note(
+        signal,
+        raw.get("trend"),
+        raw.get("regime"),
+        raw.get("bars_since_flip"),
+    )
+    return {
+        "timeframe": timeframe,
+        "side": side,
+        "entry": entry_val,
+        "target": target_val,
+        "stop": stop_val,
+        "note": note,
+    }
 
 
 def _bars_since_flip(trend: pd.Series) -> int | None:

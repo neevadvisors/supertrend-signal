@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from src.signals import NeevParams
 
 
-TimeframeLiteral = Literal["15m", "1h", "4h"]
+TimeframeLiteral = Literal["15m", "1h", "4h", "1d"]
 
 
 class NeevParamsSchema(BaseModel):
@@ -46,6 +46,40 @@ class InstrumentOut(BaseModel):
     exchange_segment: str
     instrument_type: str
     display_name: str
+
+
+class IndexSummary(BaseModel):
+    id: str
+    name: str
+    market: str
+    tier: str
+    size: int
+    blurb: str
+    refreshed_at: str | None = None
+
+
+class IndicesCatalogResponse(BaseModel):
+    refreshed_at: str | None = None
+    indices: list[IndexSummary]
+
+
+class UnresolvedSymbol(BaseModel):
+    symbol: str
+    reason: str
+
+
+class IndexMembersResponse(BaseModel):
+    id: str
+    name: str
+    market: str
+    tier: str
+    size: int
+    blurb: str
+    refreshed_at: str | None = None
+    members: list[InstrumentOut]
+    unresolved: list[UnresolvedSymbol]
+    resolved_count: int
+    unresolved_count: int
 
 
 class HealthResponse(BaseModel):

@@ -1,11 +1,21 @@
 import {
+  coverageRowsResponseSchema,
+  coverageStateSchema,
   healthSchema,
+  indexMembersSchema,
+  indicesCatalogSchema,
   instrumentSchema,
   metaDefaultsSchema,
+  securityInputSchema,
   signalsRequestSchema,
   signalsResponseSchema,
+  type CoverageRowsResponse,
+  type CoverageState,
+  type IndexMembers,
+  type IndicesCatalog,
   type Instrument,
   type MetaDefaults,
+  type SecurityInput,
   type SignalsRequest,
   type SignalsResponse,
 } from "@/lib/schemas";
@@ -88,6 +98,95 @@ export async function fetchMetaDefaults(): Promise<MetaDefaults> {
     );
   }
   return metaDefaultsSchema.parse(data);
+}
+
+export async function fetchIndicesCatalog(): Promise<IndicesCatalog> {
+  const res = await fetch(`${getApiBaseUrl()}/api/indices`);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(errorMessage(data, `Could not load indices (${res.status})`));
+  }
+  return indicesCatalogSchema.parse(data);
+}
+
+export async function fetchIndexMembers(
+  indexId: string,
+  options?: { refresh?: boolean }
+): Promise<IndexMembers> {
+  const url = new URL(`${getApiBaseUrl()}/api/indices/${indexId}/members`);
+  if (options?.refresh) url.searchParams.set("refresh", "true");
+  const res = await fetch(url.toString());
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      errorMessage(data, `Could not load index members (${res.status})`)
+    );
+  }
+  return indexMembersSchema.parse(data);
+}
+
+export async function fetchCoverage(): Promise<CoverageState> {
+  const res = await fetch(`${getApiBaseUrl()}/api/coverage`);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(errorMessage(data, `Could not load coverage (${res.status})`));
+  }
+  return coverageStateSchema.parse(data);
+}
+
+export async function putCoverage(body: CoverageState): Promise<CoverageState> {
+  const res = await fetch(`${getApiBaseUrl()}/api/coverage`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(errorMessage(data, `Could not save coverage (${res.status})`));
+  }
+  return coverageStateSchema.parse(data);
+}
+
+export async function fetchCoverageRows(): Promise<CoverageRowsResponse> {
+  const res = await fetch(`${getApiBaseUrl()}/api/coverage/rows`);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      errorMessage(data, `Could not load coverage rows (${res.status})`)
+    );
+  }
+  return coverageRowsResponseSchema.parse(data);
+}
+
+export async function postCoverageRun(securities?: SecurityInput[]): Promise<{
+  id: string;
+  status: string;
+  symbol_count: number;
+  error_count: number;
+  started_at: string;
+  finished_at: string | null;
+}> {
+  const res = await fetch(`${getApiBaseUrl()}/api/coverage/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(
+      securities?.length
+        ? { securities: securityInputSchema.array().parse(securities) }
+        : {}
+    ),
+  });
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(errorMessage(data, `Coverage run failed (${res.status})`));
+  }
+  return data as {
+    id: string;
+    status: string;
+    symbol_count: number;
+    error_count: number;
+    started_at: string;
+    finished_at: string | null;
+  };
 }
 
 export async function postSignals(

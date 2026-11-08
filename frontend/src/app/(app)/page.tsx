@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ChartsPanel } from "@/components/charts-panel";
@@ -8,17 +9,20 @@ import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import { ResultsTable } from "@/components/results-table";
 import { SettingsDrawer } from "@/components/settings-drawer";
 import { StockSearch } from "@/components/stock-search";
+import { Button } from "@/components/ui/button";
 import {
   fetchMetaDefaults,
   postSignals,
   refreshInstrumentCache,
 } from "@/lib/api";
+import { consumeStocksRun } from "@/lib/coverage-storage";
 import {
   DEFAULT_LOOKBACKS,
   DEFAULT_PARAMS,
   instrumentSchema,
   neevParamsSchema,
   showBarsSchema,
+  signalResultSchema,
   timeframeSchema,
   type Instrument,
   type NeevParams,
@@ -26,6 +30,7 @@ import {
   type SignalResult,
   type Timeframe,
 } from "@/lib/schemas";
+import { updateSignalCache } from "@/lib/signal-cache";
 
 const STORAGE_KEY = "ds:dashboard";
 
@@ -116,6 +121,7 @@ export default function HomePage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const persistenceApplied = useRef(false);
+  const skipNextCompute = useRef(false);
 
   const fingerprint = settingsFingerprint(
     params,
@@ -163,6 +169,22 @@ export default function HomePage() {
   useEffect(() => {
     if (bootLoading || persistenceApplied.current) return;
     persistenceApplied.current = true;
+    const rawFromStocks = consumeStocksRun();
+    if (rawFromStocks) {
+      const resultsParsed = signalResultSchema.array().safeParse(rawFromStocks.results);
+      if (resultsParsed.success) {
+        setSelected(rawFromStocks.selected);
+        setParams(rawFromStocks.params);
+        setTimeframe(rawFromStocks.timeframe);
+        setLookbackDays(rawFromStocks.lookbackDays);
+        setShowBars(rawFromStocks.showBars);
+        setResults(resultsParsed.data);
+        setLastUpdated(new Date());
+        updateSignalCache(resultsParsed.data, rawFromStocks.timeframe);
+        skipNextCompute.current = true;
+        return;
+      }
+    }
     const saved = loadPersistedDashboard();
     if (!saved) return;
     setSelected(saved.selected);
@@ -196,6 +218,11 @@ export default function HomePage() {
   }, [timeframe, lookbackDays]);
 
   useEffect(() => {
+    if (skipNextCompute.current) {
+      skipNextCompute.current = false;
+      return;
+    }
+
     if (selected.length === 0) {
       setResults(null);
       setSignalsError(null);
@@ -229,6 +256,7 @@ export default function HomePage() {
         if (cancelled) return;
         setResults(response.results);
         setLastUpdated(new Date());
+        updateSignalCache(response.results, timeframe);
       } catch (err) {
         if (cancelled) return;
         setSignalsError(
@@ -283,6 +311,7 @@ export default function HomePage() {
       });
       setResults(response.results);
       setLastUpdated(new Date());
+      updateSignalCache(response.results, timeframe);
     } catch (err) {
       setSignalsError(
         err instanceof Error ? err.message : "Failed to compute signals"
@@ -315,7 +344,7 @@ export default function HomePage() {
   const showResultsSection = selected.length > 0 && results != null;
 
   return (
-    <div className="min-h-screen bg-[var(--ds-bg)] text-[var(--ds-text)]">
+    <>
       <SettingsDrawer
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
@@ -355,9 +384,23 @@ export default function HomePage() {
         ) : null}
 
         {selected.length === 0 ? (
-          <p className="py-8 text-center text-sm text-[var(--ds-muted)]">
-            Select stocks to compute signals — try RELIANCE, HDFCBANK, or TCS.
-          </p>
+          <div className="py-8 text-center text-sm text-[var(--ds-muted)]">
+            <p>
+              Pick stocks on the{" "}
+              <Link href="/stocks" className="text-[var(--ds-text)] underline">
+                Stocks
+              </Link>{" "}
+              page, or search here — try RELIANCE, HDFCBANK, or TCS.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4 border-[var(--ds-border)]"
+              onClick={() => router.push("/stocks")}
+            >
+              Go to Stocks coverage
+            </Button>
+          </div>
         ) : null}
 
         {signalsError ? (
@@ -390,6 +433,6 @@ export default function HomePage() {
           </div>
         ) : null}
       </main>
-    </div>
+    </>
   );
 }

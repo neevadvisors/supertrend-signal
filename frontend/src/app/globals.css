@@ -135,6 +135,23 @@
   html {
     @apply font-sans;
   }
+  /* Tailwind preflight sets button cursor to default; restore pointer for clickables */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  summary,
+  label[for],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  select:disabled,
+  input:disabled {
+    cursor: not-allowed;
+  }
 }
 
 .ds-stock-grid {

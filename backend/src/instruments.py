@@ -51,6 +51,11 @@ def _prepare_equity(df: pd.DataFrame) -> pd.DataFrame:
     else:
         equity["SEM_CUSTOM_SYMBOL"] = equity["SEM_TRADING_SYMBOL"]
 
+    if "SEM_SERIES" in equity.columns:
+        equity["SEM_SERIES"] = equity["SEM_SERIES"].astype(str).str.strip().str.upper()
+    else:
+        equity["SEM_SERIES"] = "EQ"
+
     equity = equity.drop_duplicates(subset=["SEM_SMST_SECURITY_ID"]).sort_values(
         "SEM_TRADING_SYMBOL"
     )
@@ -126,6 +131,39 @@ def row_to_instrument(row: pd.Series) -> dict:
         "instrument_type": "EQUITY",
         "display_name": str(display),
     }
+
+
+_SERIES_RANK = {"EQ": 0, "BE": 1, "BZ": 2, "RR": 3, "IV": 4, "SM": 5}
+
+
+def resolve_nse_equity_symbol(
+    symbol: str,
+    *,
+    force_refresh: bool = False,
+) -> tuple[dict | None, str | None]:
+    """
+    Map an NSE trading symbol to an instrument dict.
+
+    Returns (instrument, None) on success or (None, reason) when not found.
+    """
+    equity = load_nse_equity_instruments(force_refresh=force_refresh)
+    sym = (symbol or "").strip().upper()
+    if not sym:
+        return None, "empty_symbol"
+
+    matched = equity[equity["symbol_upper"] == sym]
+    if matched.empty:
+        return None, "not_in_scrip_master"
+
+    if len(matched) > 1:
+        matched = matched.copy()
+        matched["_series_rank"] = matched["SEM_SERIES"].map(
+            lambda s: _SERIES_RANK.get(str(s).upper(), 99)
+        )
+        matched = matched.sort_values(["_series_rank", "SEM_SMST_SECURITY_ID"])
+
+    row = matched.iloc[0]
+    return row_to_instrument(row), None
 
 
 def build_label_map(instruments: pd.DataFrame) -> dict[str, dict]:
