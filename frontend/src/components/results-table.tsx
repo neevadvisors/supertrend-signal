@@ -48,19 +48,37 @@ export function ResultsTable({ results }: ResultsTableProps) {
       </Button>
 
       {open ? (
-        <div className="overflow-x-auto border-t border-[var(--ds-border)] px-2 pb-2">
-          <Table>
+        <div className="border-t border-[var(--ds-border)] px-2 pb-2">
+          <Table containerClassName="">
             <TableHeader>
               <TableRow>
-                <TableHead>Symbol</TableHead>
-                <TableHead>Signal</TableHead>
-                <TableHead>Trend</TableHead>
-                <TableHead>Close</TableHead>
-                <TableHead>ST</TableHead>
-                <TableHead>Bars since flip</TableHead>
-                <TableHead className="hidden md:table-cell">Regime</TableHead>
-                <TableHead className="hidden md:table-cell">Bar time</TableHead>
-                <TableHead className="hidden md:table-cell">Error</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-[var(--ds-surface)]">
+                  Symbol
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 bg-[var(--ds-surface)]">
+                  Signal
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 bg-[var(--ds-surface)]">
+                  Trend
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 bg-[var(--ds-surface)]">
+                  Close
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 bg-[var(--ds-surface)]">
+                  ST
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 bg-[var(--ds-surface)]">
+                  Bars since flip
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 hidden bg-[var(--ds-surface)] md:table-cell">
+                  Regime
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 hidden bg-[var(--ds-surface)] md:table-cell">
+                  Bar time
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 hidden bg-[var(--ds-surface)] md:table-cell">
+                  Error
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

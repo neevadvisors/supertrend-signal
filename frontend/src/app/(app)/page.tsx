@@ -355,83 +355,93 @@ export default function HomePage() {
         instrumentsLoading={instrumentsRefreshing}
       />
 
-      <main className="mx-auto max-w-6xl space-y-4 p-4 md:space-y-5 md:p-6 lg:p-8">
-        <DashboardHeader
-          lastUpdated={lastUpdated}
-          signalsLoading={signalsLoading}
-          refreshDisabled={selected.length === 0}
-          onRefreshMarket={() => void handleForceMarketRefresh()}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onLogout={handleLogout}
-        />
-
-        <StockSearch
-          selected={selected}
-          onChange={setSelected}
-          disabled={bootLoading}
-        />
-
-        {bootError ? (
-          <div className="rounded-lg border border-[var(--ds-sell)] bg-[rgba(248,81,73,0.12)] px-3 py-2 text-sm text-[var(--ds-sell)]">
-            {bootError}
-          </div>
-        ) : null}
-
-        {instrumentsError ? (
-          <div className="rounded-lg border border-[var(--ds-sell)] bg-[rgba(248,81,73,0.12)] px-3 py-2 text-sm text-[var(--ds-sell)]">
-            {instrumentsError}
-          </div>
-        ) : null}
-
-        {selected.length === 0 ? (
-          <div className="py-8 text-center text-sm text-[var(--ds-muted)]">
-            <p>
-              Pick stocks on the{" "}
-              <Link href="/stocks" className="text-[var(--ds-text)] underline">
-                Stocks
-              </Link>{" "}
-              page, or search here — try RELIANCE, HDFCBANK, or TCS.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-4 border-[var(--ds-border)]"
-              onClick={() => router.push("/stocks")}
-            >
-              Go to Stocks coverage
-            </Button>
-          </div>
-        ) : null}
-
-        {signalsError ? (
-          <div className="rounded-lg border border-[var(--ds-sell)] bg-[rgba(248,81,73,0.12)] px-3 py-2 text-sm text-[var(--ds-sell)]">
-            {signalsError}
-          </div>
-        ) : null}
-
-        {signalsLoading && !results ? <DashboardSkeleton /> : null}
-
-        {showResultsSection ? (
-          <div
-            className={
-              signalsLoading ? "space-y-4 opacity-60 transition-opacity" : "space-y-4"
-            }
-          >
-            <ChartsPanel
-              selected={selected}
-              results={results}
-              showBars={showBars}
-              timeframe={timeframe}
-              lookbackDays={lookbackDays}
-              lookbacks={lookbacks}
-              onTimeframeChange={setTimeframe}
-              onLookbackChange={setLookbackDays}
-              onShowBarsChange={setShowBars}
-              onRemove={handleRemoveStock}
+      <main className="flex h-full min-h-0 flex-col overflow-hidden p-4 md:p-6 lg:p-8">
+        <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-4 md:gap-5">
+          <div className="shrink-0 space-y-4 md:space-y-5">
+            <DashboardHeader
+              lastUpdated={lastUpdated}
+              signalsLoading={signalsLoading}
+              refreshDisabled={selected.length === 0}
+              onRefreshMarket={() => void handleForceMarketRefresh()}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onLogout={handleLogout}
             />
-            <ResultsTable results={results} />
+
+            <StockSearch
+              selected={selected}
+              onChange={setSelected}
+              disabled={bootLoading}
+            />
+
+            {bootError ? (
+              <div className="rounded-lg border border-[var(--ds-sell)] bg-[rgba(248,81,73,0.12)] px-3 py-2 text-sm text-[var(--ds-sell)]">
+                {bootError}
+              </div>
+            ) : null}
+
+            {instrumentsError ? (
+              <div className="rounded-lg border border-[var(--ds-sell)] bg-[rgba(248,81,73,0.12)] px-3 py-2 text-sm text-[var(--ds-sell)]">
+                {instrumentsError}
+              </div>
+            ) : null}
+
+            {selected.length === 0 ? (
+              <div className="py-8 text-center text-sm text-[var(--ds-muted)]">
+                <p>
+                  Pick stocks on the{" "}
+                  <Link href="/stocks" className="text-[var(--ds-text)] underline">
+                    Stocks
+                  </Link>{" "}
+                  page, or search here — try RELIANCE, HDFCBANK, or TCS.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-4 border-[var(--ds-border)]"
+                  onClick={() => router.push("/stocks")}
+                >
+                  Go to Stocks coverage
+                </Button>
+              </div>
+            ) : null}
+
+            {signalsError ? (
+              <div className="rounded-lg border border-[var(--ds-sell)] bg-[rgba(248,81,73,0.12)] px-3 py-2 text-sm text-[var(--ds-sell)]">
+                {signalsError}
+              </div>
+            ) : null}
+
+            {signalsLoading && !results ? <DashboardSkeleton /> : null}
           </div>
-        ) : null}
+
+          {showResultsSection ? (
+            <div
+              className={
+                signalsLoading
+                  ? "flex min-h-0 flex-1 flex-col gap-4 opacity-60 transition-opacity"
+                  : "flex min-h-0 flex-1 flex-col gap-4"
+              }
+            >
+              <div className="shrink-0">
+                <ChartsPanel
+                  selected={selected}
+                  results={results}
+                  showBars={showBars}
+                  timeframe={timeframe}
+                  lookbackDays={lookbackDays}
+                  lookbacks={lookbacks}
+                  onTimeframeChange={setTimeframe}
+                  onLookbackChange={setLookbackDays}
+                  onShowBarsChange={setShowBars}
+                  onRemove={handleRemoveStock}
+                />
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <ResultsTable results={results} />
+              </div>
+            </div>
+          ) : null}
+        </div>
       </main>
     </>
   );

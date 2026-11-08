@@ -14,7 +14,7 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-[var(--ds-border)] bg-[var(--ds-surface)]">
+    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-[var(--ds-border)] bg-[var(--ds-surface)]">
       <div className="flex items-center gap-2.5 px-5 pt-5 pb-6">
         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--ds-text)] text-sm font-semibold text-[var(--ds-bg)]">
           N

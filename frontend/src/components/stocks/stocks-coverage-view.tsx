@@ -429,8 +429,8 @@ export function StocksCoverageView() {
   const indexNames = Object.fromEntries(catalog.map((i) => [i.id, i.name]));
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--ds-border)] px-6 py-5 md:px-8">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <header className="flex shrink-0 flex-wrap items-start justify-between gap-4 border-b border-[var(--ds-border)] px-6 py-5 md:px-8">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Stocks</h1>
           <p className="mt-1 max-w-2xl text-sm text-[var(--ds-muted)]">
@@ -469,25 +469,25 @@ export function StocksCoverageView() {
       </header>
 
       {runError ? (
-        <div className="mx-8 mt-4 rounded-lg border border-[var(--ds-sell)] bg-[rgba(248,81,73,0.12)] px-3 py-2 text-sm text-[var(--ds-sell)]">
+        <div className="mx-8 mt-4 shrink-0 rounded-lg border border-[var(--ds-sell)] bg-[rgba(248,81,73,0.12)] px-3 py-2 text-sm text-[var(--ds-sell)]">
           {runError}
         </div>
       ) : null}
 
       {runNotice ? (
-        <div className="mx-8 mt-4 rounded-lg border border-[var(--ds-hold)] bg-[rgba(210,153,34,0.12)] px-3 py-2 text-sm text-[var(--ds-hold)]">
+        <div className="mx-8 mt-4 shrink-0 rounded-lg border border-[var(--ds-hold)] bg-[rgba(210,153,34,0.12)] px-3 py-2 text-sm text-[var(--ds-hold)]">
           {runNotice}
         </div>
       ) : null}
 
       {unresolvedNote ? (
-        <div className="mx-8 mt-4 rounded-lg border border-[var(--ds-hold)] bg-[rgba(210,153,34,0.12)] px-3 py-2 text-sm text-[var(--ds-hold)]">
+        <div className="mx-8 mt-4 shrink-0 rounded-lg border border-[var(--ds-hold)] bg-[rgba(210,153,34,0.12)] px-3 py-2 text-sm text-[var(--ds-hold)]">
           {unresolvedNote}
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1">
-        <nav className="w-64 shrink-0 border-r border-[var(--ds-border)] bg-[var(--ds-surface)] px-3 py-4">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <nav className="w-64 shrink-0 overflow-y-auto border-r border-[var(--ds-border)] bg-[var(--ds-surface)] px-3 py-4">
           <RailItem
             active={scope === "ALL"}
             onClick={() => pickScope("ALL")}
@@ -538,9 +538,9 @@ export function StocksCoverageView() {
           </div>
         </nav>
 
-        <div className="min-w-0 flex-1 px-6 py-5 md:px-8">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col px-6 py-5 md:px-8">
           {activeIndex ? (
-            <div className="mb-4 flex items-start justify-between gap-6 border-b border-[var(--ds-border)] pb-4">
+            <div className="mb-4 flex shrink-0 items-start justify-between gap-6 border-b border-[var(--ds-border)] pb-4">
               <div>
                 <h2 className="text-base font-semibold">{activeIndex.name}</h2>
                 <p className="mt-0.5 text-sm text-[var(--ds-muted)]">{activeIndex.blurb}</p>
@@ -586,7 +586,7 @@ export function StocksCoverageView() {
             </div>
           ) : null}
 
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-4">
+          <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-4">
             <div className="text-sm font-medium text-[var(--ds-text)]">
               {scope === "MANUAL"
                 ? "Individual stocks"
@@ -605,11 +605,11 @@ export function StocksCoverageView() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface)]">
-            <Table>
+          <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface)]">
+            <Table containerClassName="">
               <TableHeader>
                 <TableRow className="border-[var(--ds-border)] hover:bg-transparent">
-                  <TableHead className="w-10">
+                  <TableHead className="sticky top-0 z-10 w-10 bg-[var(--ds-surface)]">
                     <button
                       type="button"
                       onClick={() =>
@@ -623,12 +623,22 @@ export function StocksCoverageView() {
                       <RowCheckbox on={allSelected} />
                     </button>
                   </TableHead>
-                  <TableHead>Stock</TableHead>
-                  <TableHead>{scope === "ALL" ? "Covered through" : "Source"}</TableHead>
-                  <TableHead className="text-right">LTP</TableHead>
-                  <TableHead className="pl-4">Signals · 1h / 4h / 1d</TableHead>
-                  <TableHead>Last run</TableHead>
-                  <TableHead className="w-12" />
+                  <TableHead className="sticky top-0 z-10 bg-[var(--ds-surface)]">
+                    Stock
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-[var(--ds-surface)]">
+                    {scope === "ALL" ? "Covered through" : "Source"}
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-[var(--ds-surface)] text-right">
+                    LTP
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-[var(--ds-surface)] pl-4">
+                    Signals · 1h / 4h / 1d
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-[var(--ds-surface)]">
+                    Last run
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 w-12 bg-[var(--ds-surface)]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -779,7 +789,7 @@ export function StocksCoverageView() {
               </TableBody>
             </Table>
           </div>
-          <p className="mt-3 text-xs text-[var(--ds-muted)]">
+          <p className="mt-3 shrink-0 text-xs text-[var(--ds-muted)]">
             Select stocks to run a subset, or run everything in view. The worker also
             refreshes signals every hour.
           </p>
