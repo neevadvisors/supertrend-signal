@@ -12,7 +12,14 @@ from sqlalchemy.orm import Session
 from app.db.models import CoverageIndex, CoverageManualStock, SignalRun, SignalSnapshot
 from app.db.session import SessionLocal
 from app.services.coverage_service import CoveredSecurity, expand_coverage
-from src.dhan_client import Timeframe, default_lookback_for_timeframe, fetch_candles, get_dhan_client
+from src.dhan_client import (
+    Timeframe,
+    cache_prev_close,
+    default_lookback_for_timeframe,
+    fetch_candles,
+    get_dhan_client,
+    prev_close_from_daily_df,
+)
 from src.signals import NeevParams, latest_signal, signal_snapshot_from_latest
 
 CRON_TIMEFRAMES: tuple[Timeframe, ...] = ("1h", "4h", "1d")
@@ -42,6 +49,10 @@ def _compute_security(
                 lookback_days=default_lookback_for_timeframe(tf),
                 client=client,
             )
+            if tf == "1d":
+                prev = prev_close_from_daily_df(ohlc)
+                if prev is not None:
+                    cache_prev_close(sec.security_id, prev)
             raw = latest_signal(ohlc, params, timeframe=tf)
             mapped = signal_snapshot_from_latest(raw, timeframe=tf)
             snapshots.append(

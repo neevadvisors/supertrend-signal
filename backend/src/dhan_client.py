@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Callable, Literal, TypeVar
 
 import httpx
@@ -428,11 +428,251 @@ class QuoteInstrument:
         self.exchange_segment = exchange_segment
 
 
+# sid -> (prev_close, for_date ISO); memory + data/prev_closes.json (warm-start only)
+_PREV_CLOSE_CACHE: dict[str, tuple[float, str]] = {}
+_PREV_CLOSE_PATH = PROJECT_ROOT / "data" / "prev_closes.json"
+_PREV_CLOSE_LOCK = threading.Lock()
+_PREV_CLOSE_LOADED = False
+_PREV_CLOSE_WARM_RUNNING = False
+
+
+def _is_nse_cash_session(now: datetime | None = None) -> bool:
+    """True during NSE cash continuous session (Mon–Fri 09:15–15:30 IST)."""
+    current = now or datetime.now(IST)
+    if current.weekday() >= 5:
+        return False
+    minutes = current.hour * 60 + current.minute
+    return NSE_SESSION_OPEN_MINUTES <= minutes <= NSE_SESSION_CLOSE_MINUTES
+
+
+def _change_reference_date(now: datetime | None = None) -> date:
+    """IST calendar date that day-change % is measured against (Fri on weekends)."""
+    current = now or datetime.now(IST)
+    while current.weekday() >= 5:
+        current = current - timedelta(days=1)
+    return current.date()
+
+
+def _df_bar_dates(df: pd.DataFrame) -> pd.Series:
+    ts = pd.to_datetime(df["timestamp"])
+    if ts.dt.tz is None:
+        ts = ts.dt.tz_localize(IST, ambiguous="infer")
+    else:
+        ts = ts.dt.tz_convert(IST)
+    return ts.dt.date
+
+
+def _change_pct(ltp: float | None, prev_close: float | None) -> float | None:
+    if ltp is None or prev_close is None or prev_close == 0:
+        return None
+    return (ltp - prev_close) / prev_close * 100.0
+
+
+def _load_prev_close_file() -> None:
+    global _PREV_CLOSE_LOADED
+    if _PREV_CLOSE_LOADED:
+        return
+    with _PREV_CLOSE_LOCK:
+        if _PREV_CLOSE_LOADED:
+            return
+        try:
+            import json
+
+            raw = json.loads(_PREV_CLOSE_PATH.read_text())
+            ref = _change_reference_date().isoformat()
+            if isinstance(raw, dict):
+                for sid, item in raw.items():
+                    if not isinstance(item, dict):
+                        continue
+                    prev = item.get("prev_close")
+                    for_date = item.get("for_date")
+                    if prev is None or for_date is None:
+                        continue
+                    if str(for_date) != ref:
+                        continue
+                    _PREV_CLOSE_CACHE[str(sid)] = (float(prev), str(for_date))
+        except FileNotFoundError:
+            pass
+        except Exception:
+            pass
+        _PREV_CLOSE_LOADED = True
+
+
+def _persist_prev_close_file() -> None:
+    import json
+
+    ref = _change_reference_date().isoformat()
+    payload = {
+        sid: {"prev_close": prev, "for_date": for_date}
+        for sid, (prev, for_date) in _PREV_CLOSE_CACHE.items()
+        if for_date == ref
+    }
+    _PREV_CLOSE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = _PREV_CLOSE_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(payload))
+    tmp.replace(_PREV_CLOSE_PATH)
+
+
+def cache_prev_close(security_id: str, prev_close: float) -> None:
+    """Remember previous session close for the current change-reference day."""
+    if prev_close == 0:
+        return
+    _load_prev_close_file()
+    for_date = _change_reference_date().isoformat()
+    with _PREV_CLOSE_LOCK:
+        _PREV_CLOSE_CACHE[str(security_id)] = (float(prev_close), for_date)
+        try:
+            _persist_prev_close_file()
+        except Exception:
+            pass
+
+
+def cached_prev_close(security_id: str) -> float | None:
+    _load_prev_close_file()
+    ref = _change_reference_date().isoformat()
+    entry = _PREV_CLOSE_CACHE.get(str(security_id))
+    if entry is None:
+        return None
+    prev, for_date = entry
+    if for_date != ref:
+        return None
+    return prev
+
+
+def prev_close_from_daily_df(
+    df: pd.DataFrame,
+    today: date | None = None,
+) -> float | None:
+    """Prior session close: last daily bar strictly before today's IST date."""
+    if df is None or df.empty or "close" not in df.columns or "timestamp" not in df.columns:
+        return None
+    today = today or _change_reference_date()
+    bar_dates = _df_bar_dates(df)
+    work = df.loc[(bar_dates < today) & (df["close"] != 0)]
+    if work.empty:
+        return None
+    return float(work["close"].iloc[-1])
+
+
+def today_session_close_from_daily_df(
+    df: pd.DataFrame,
+    today: date | None = None,
+) -> float | None:
+    """Official close for the change-reference session day, if present in the frame."""
+    if df is None or df.empty or "close" not in df.columns or "timestamp" not in df.columns:
+        return None
+    today = today or _change_reference_date()
+    bar_dates = _df_bar_dates(df)
+    work = df.loc[(bar_dates == today) & (df["close"] != 0)]
+    if work.empty:
+        return None
+    return float(work["close"].iloc[-1])
+
+
+def _closes_from_daily_df(df: pd.DataFrame) -> tuple[float | None, float | None]:
+    return prev_close_from_daily_df(df), today_session_close_from_daily_df(df)
+
+
+def _prev_close_from_daily(
+    security_id: str,
+    exchange_segment: str,
+) -> tuple[float | None, float | None]:
+    try:
+        df = _fetch_daily_historical(security_id, exchange_segment, "EQUITY", 12)
+    except Exception:
+        return None, None
+    return _closes_from_daily_df(df)
+
+
+def _apply_after_hours_row_from_daily(
+    security_id: str,
+    exchange_segment: str,
+    row: dict[str, float | None],
+) -> None:
+    prev, session_close = _prev_close_from_daily(security_id, exchange_segment)
+    if prev is not None:
+        cache_prev_close(security_id, prev)
+        row["prev_close"] = prev
+    if session_close is not None:
+        row["ltp"] = session_close
+    row["change_pct"] = _change_pct(row.get("ltp"), row.get("prev_close"))
+
+
+def _warm_prev_closes(instruments: list[QuoteInstrument]) -> None:
+    global _PREV_CLOSE_WARM_RUNNING
+    try:
+        for inst in instruments:
+            sid = str(inst.security_id)
+            if cached_prev_close(sid) is not None:
+                continue
+            prev, _ = _prev_close_from_daily(sid, inst.exchange_segment)
+            if prev is not None:
+                cache_prev_close(sid, prev)
+    finally:
+        with _PREV_CLOSE_LOCK:
+            _PREV_CLOSE_WARM_RUNNING = False
+
+
+def _ensure_prev_close_warm(instruments: list[QuoteInstrument]) -> None:
+    """Fill after-hours prev-close cache in the background (avoids slow /rows)."""
+    global _PREV_CLOSE_WARM_RUNNING
+    _load_prev_close_file()
+    missing = [
+        inst
+        for inst in instruments
+        if cached_prev_close(str(inst.security_id)) is None
+    ]
+    with _PREV_CLOSE_LOCK:
+        if not missing or _PREV_CLOSE_WARM_RUNNING:
+            return
+        _PREV_CLOSE_WARM_RUNNING = True
+    threading.Thread(
+        target=_warm_prev_closes,
+        args=(missing,),
+        daemon=True,
+        name="prev-close-warm",
+    ).start()
+
+
+def _resolve_prev_close(
+    security_id: str,
+    *,
+    ltp: float | None,
+    net_change: float | None,
+    in_session: bool,
+) -> float | None:
+    """
+    Previous close for day-change %.
+
+    During the session only nonzero `net_change` is trusted (Dhan: LTP - prev close).
+    After hours / holidays Dhan zeros net_change; use cache or daily history.
+    """
+    if (
+        in_session
+        and net_change is not None
+        and net_change != 0
+        and ltp is not None
+    ):
+        prev = ltp - net_change
+        if prev != 0:
+            cache_prev_close(security_id, prev)
+            return prev
+
+    cached = cached_prev_close(security_id)
+    if cached is not None:
+        return cached
+    return None
+
+
 def fetch_market_ohlc(
     instruments: list[QuoteInstrument],
 ) -> dict[str, dict[str, float | None]]:
     """
-    Batch LTP + prior close from Dhan marketfeed OHLC.
+    Batch LTP + day change from Dhan marketfeed quote.
+
+    Uses `net_change` (vs previous close) during market hours. After hours Dhan
+    zeros net_change and sets ohlc.close == LTP, so we fall back to cached /
+    daily previous close.
 
     Returns security_id -> {ltp, prev_close, change_pct}.
     """
@@ -449,6 +689,10 @@ def fetch_market_ohlc(
 
     out: dict[str, dict[str, float | None]] = {}
     headers = _auth_headers()
+    in_session = _is_nse_cash_session()
+    segment_by_sid: dict[str, str] = {
+        str(inst.security_id): inst.exchange_segment for inst in instruments
+    }
 
     with httpx.Client(timeout=30.0) as http:
         for segment, ids in grouped.items():
@@ -457,30 +701,49 @@ def fetch_market_ohlc(
                 chunk = unique_ids[offset : offset + 1000]
                 body = {segment: chunk}
                 res = http.post(
-                    f"{DHAN_API_BASE}/marketfeed/ohlc",
+                    f"{DHAN_API_BASE}/marketfeed/quote",
                     headers=headers,
                     json=body,
                 )
                 res.raise_for_status()
                 payload = res.json()
+                if isinstance(payload, dict) and payload.get("status") == "failed":
+                    raise RuntimeError(f"Dhan quote failed: {payload.get('data')}")
                 data = payload.get("data", payload)
                 segment_data = data.get(segment, {}) if isinstance(data, dict) else {}
                 for sid_key, row in segment_data.items():
                     if not isinstance(row, dict):
                         continue
-                    ltp = row.get("last_price")
-                    ohlc = row.get("ohlc") if isinstance(row.get("ohlc"), dict) else {}
-                    prev = ohlc.get("close") if ohlc else None
-                    ltp_f = float(ltp) if ltp is not None else None
-                    prev_f = float(prev) if prev is not None else None
-                    change_pct = None
-                    if ltp_f is not None and prev_f and prev_f != 0:
-                        change_pct = (ltp_f - prev_f) / prev_f * 100.0
+                    ltp_f = (
+                        float(row["last_price"])
+                        if row.get("last_price") is not None
+                        else None
+                    )
+                    net_raw = row.get("net_change")
+                    net_change = float(net_raw) if net_raw is not None else None
+                    prev_f = _resolve_prev_close(
+                        str(sid_key),
+                        ltp=ltp_f,
+                        net_change=net_change,
+                        in_session=in_session,
+                    )
                     out[str(sid_key)] = {
                         "ltp": ltp_f,
                         "prev_close": prev_f,
-                        "change_pct": change_pct,
+                        "change_pct": _change_pct(ltp_f, prev_f),
                     }
                 time.sleep(1.05)
+
+    if not in_session:
+        _ensure_prev_close_warm(instruments)
+        for sid, row in out.items():
+            prev = row.get("prev_close") or cached_prev_close(sid)
+            if prev is not None:
+                row["prev_close"] = prev
+            if row.get("prev_close") is None:
+                segment = segment_by_sid.get(sid, "NSE_EQ")
+                _apply_after_hours_row_from_daily(sid, segment, row)
+                continue
+            row["change_pct"] = _change_pct(row.get("ltp"), row["prev_close"])
 
     return out
