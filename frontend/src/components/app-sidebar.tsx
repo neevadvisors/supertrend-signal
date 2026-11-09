@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Cpu, ListChecks, Radar } from "lucide-react";
+import { fetchSignalMatrix } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -12,6 +14,13 @@ const nav = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchSignalMatrix()
+      .then((m) => setPendingCount(m.pending_count))
+      .catch(() => setPendingCount(null));
+  }, []);
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-[var(--ds-border)] bg-[var(--ds-surface)]">
@@ -47,6 +56,11 @@ export function AppSidebar() {
             >
               <Icon size={16} strokeWidth={1.75} />
               <span className="flex-1">{item.label}</span>
+              {item.href === "/" && pendingCount != null && pendingCount > 0 ? (
+                <span className="rounded-sm bg-[color-mix(in_srgb,var(--ds-hold)_22%,transparent)] px-1.5 py-0.5 font-mono text-xs text-[var(--ds-hold)]">
+                  {pendingCount}
+                </span>
+              ) : null}
             </Link>
           );
         })}
@@ -61,7 +75,7 @@ export function AppSidebar() {
             NEEV Renko ST
           </div>
           <div className="mt-0.5 text-xs leading-relaxed text-[var(--ds-muted)]">
-            Supertrend · 15m, 1h, 4h
+            Supertrend · 1h, 4h, 1d
           </div>
         </div>
       </div>

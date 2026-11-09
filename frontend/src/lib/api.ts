@@ -9,6 +9,8 @@ import {
   securityInputSchema,
   signalsRequestSchema,
   signalsResponseSchema,
+  signalCellSchema,
+  signalMatrixResponseSchema,
   type CoverageRowsResponse,
   type CoverageState,
   type IndexMembers,
@@ -16,6 +18,8 @@ import {
   type Instrument,
   type MetaDefaults,
   type SecurityInput,
+  type SignalCell,
+  type SignalMatrixResponse,
   type SignalsRequest,
   type SignalsResponse,
 } from "@/lib/schemas";
@@ -187,6 +191,39 @@ export async function postCoverageRun(securities?: SecurityInput[]): Promise<{
     started_at: string;
     finished_at: string | null;
   };
+}
+
+export async function fetchSignalMatrix(): Promise<SignalMatrixResponse> {
+  const res = await fetch(`${getApiBaseUrl()}/api/signals/matrix`);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      errorMessage(data, `Could not load signal matrix (${res.status})`)
+    );
+  }
+  return signalMatrixResponseSchema.parse(data);
+}
+
+export async function patchSignalStatus(
+  securityId: string,
+  timeframe: string,
+  status: "pending" | "approved" | "skipped"
+): Promise<SignalCell> {
+  const res = await fetch(
+    `${getApiBaseUrl()}/api/signals/${encodeURIComponent(securityId)}/${encodeURIComponent(timeframe)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    }
+  );
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      errorMessage(data, `Could not update signal status (${res.status})`)
+    );
+  }
+  return signalCellSchema.parse(data);
 }
 
 export async function postSignals(

@@ -190,3 +190,61 @@ export const DEFAULT_LOOKBACKS: Record<Timeframe, number> = {
   "1h": 90,
   "4h": 365,
 };
+
+export const reviewTimeframeSchema = z.enum(["1h", "4h", "1d"]);
+export type ReviewTimeframe = z.infer<typeof reviewTimeframeSchema>;
+
+export const signalCellSchema = z.object({
+  security_id: z.string(),
+  symbol: z.string(),
+  timeframe: reviewTimeframeSchema,
+  side: z.string(),
+  entry: z.number().nullable(),
+  target: z.number().nullable(),
+  stop: z.number().nullable(),
+  note: z.string(),
+  status: z.string(),
+  computed_at: z.string(),
+  run_id: z.string(),
+});
+export type SignalCell = z.infer<typeof signalCellSchema>;
+
+export const matrixStockSchema = z.object({
+  security_id: z.string(),
+  symbol: z.string(),
+  display_name: z.string(),
+  exchange_segment: z.string(),
+  sources: z.array(z.string()),
+  manual: z.boolean(),
+  ltp: z.number().nullable().optional(),
+  change_pct: z.number().nullable().optional(),
+  last_run_at: z.string().nullable().optional(),
+});
+export type MatrixStock = z.infer<typeof matrixStockSchema>;
+
+export const latestRunSchema = z.object({
+  id: z.string(),
+  trigger: z.string(),
+  symbol_count: z.number(),
+  finished_at: z.string().nullable(),
+});
+export type LatestRun = z.infer<typeof latestRunSchema>;
+
+export const signalMatrixResponseSchema = z.object({
+  last_run_at: z.string().nullable(),
+  pending_count: z.number(),
+  latest_run: latestRunSchema.nullable().optional(),
+  stocks: z.array(matrixStockSchema),
+  cells: z.array(signalCellSchema),
+});
+export type SignalMatrixResponse = z.infer<typeof signalMatrixResponseSchema>;
+
+export const REVIEW_TIMEFRAMES: {
+  id: ReviewTimeframe;
+  label: string;
+  horizon: string;
+}[] = [
+  { id: "1h", label: "1 Hour", horizon: "1–3 days" },
+  { id: "4h", label: "4 Hour", horizon: "3–10 days" },
+  { id: "1d", label: "1 Day", horizon: "2–6 weeks" },
+];
