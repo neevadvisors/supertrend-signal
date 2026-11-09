@@ -21,7 +21,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 UTC = ZoneInfo("UTC")
 
 ALPACA_DATA_BASE = "https://data.alpaca.markets/v2"
-ALPACA_API_BASE = "https://api.alpaca.markets/v2"
+ALPACA_TRADING_LIVE_BASE = "https://api.alpaca.markets/v2"
+ALPACA_TRADING_PAPER_BASE = "https://paper-api.alpaca.markets/v2"
 
 SNAPSHOT_BATCH_SIZE = 100
 RATE_LIMIT_MAX_RETRIES = 5
@@ -61,6 +62,21 @@ def _alpaca_credentials() -> tuple[str, str]:
             "(set US_MARKET_ENABLED only after keys are configured)."
         )
     return key, secret
+
+
+def _alpaca_trading_base() -> str:
+    """Trading API host (e.g. ``/v2/assets``). Market data stays on data.alpaca.markets."""
+    _load_env()
+    override = (
+        os.getenv("ALPACA_TRADING_BASE", "").strip()
+        or os.getenv("ALPACA_API_BASE", "").strip()
+    )
+    if override:
+        return override.rstrip("/")
+    key, _ = _alpaca_credentials()
+    if key.upper().startswith("PK"):
+        return ALPACA_TRADING_PAPER_BASE
+    return ALPACA_TRADING_LIVE_BASE
 
 
 def _headers() -> dict[str, str]:
@@ -220,7 +236,7 @@ def _active_us_equities() -> list[dict[str, Any]]:
             payload = _request(
                 http,
                 "GET",
-                f"{ALPACA_API_BASE}/assets",
+                f"{_alpaca_trading_base()}/assets",
                 params={
                     "status": "active",
                     "asset_class": "us_equity",

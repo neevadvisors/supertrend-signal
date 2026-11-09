@@ -100,6 +100,7 @@ export function AddCoverageDialog({
   const [searchResults, setSearchResults] = useState<Instrument[]>([]);
   const [popularStocks, setPopularStocks] = useState<Instrument[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [popularLoading, setPopularLoading] = useState(false);
 
   const existingManualIds = useMemo(
@@ -163,12 +164,21 @@ export function AddCoverageDialog({
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setSearching(true);
+      setSearchError(null);
       void searchInstruments(trimmed, { limit: 40, market })
         .then((rows) => {
-          if (!cancelled) setSearchResults(rows);
+          if (!cancelled) {
+            setSearchResults(rows);
+            setSearchError(null);
+          }
         })
-        .catch(() => {
-          if (!cancelled) setSearchResults([]);
+        .catch((err) => {
+          if (!cancelled) {
+            setSearchResults([]);
+            setSearchError(
+              err instanceof Error ? err.message : "Search failed"
+            );
+          }
         })
         .finally(() => {
           if (!cancelled) setSearching(false);
@@ -284,6 +294,7 @@ export function AddCoverageDialog({
                 onClick={() => {
                   setMarket(id);
                   setQ("");
+                  setSearchError(null);
                 }}
                 className={cn(
                   "rounded-sm px-3 py-1.5 text-sm",
@@ -389,7 +400,12 @@ export function AddCoverageDialog({
                   </button>
                 );
               })}
-              {q.trim() && !searching && searchResults.length === 0 ? (
+              {searchError ? (
+                <div className="py-6 text-center text-sm text-[var(--ds-sell)]">
+                  {searchError}
+                </div>
+              ) : null}
+              {q.trim() && !searching && !searchError && searchResults.length === 0 ? (
                 <div className="py-10 text-center text-sm text-[var(--ds-muted)]">
                   No match for &quot;{q.trim()}&quot;
                 </div>

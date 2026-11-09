@@ -50,7 +50,7 @@ import {
   type IndexSummary,
   type Instrument,
 } from "@/lib/schemas";
-import { fmtPrice, resolveMarket } from "@/lib/format";
+import { fmtPrice, resolveCurrency, resolveMarket } from "@/lib/format";
 import { formatLastRun } from "@/lib/signal-cache";
 import { cn } from "@/lib/utils";
 
@@ -398,13 +398,18 @@ export function StocksCoverageView() {
     setRunNotice(null);
     markJobStarted();
     try {
-      const securities = target.map((inst) => ({
-        security_id: inst.security_id,
-        symbol: inst.symbol,
-        display_name: inst.display_name,
-        exchange_segment: inst.exchange_segment,
-        instrument_type: inst.instrument_type,
-      }));
+      const securities = target.map((inst) => {
+        const market = instrumentMarket(inst);
+        return {
+          security_id: inst.security_id,
+          symbol: inst.symbol,
+          display_name: inst.display_name,
+          exchange_segment: inst.exchange_segment,
+          instrument_type: inst.instrument_type,
+          market,
+          currency: resolveCurrency(inst.currency, market),
+        };
+      });
       const runResult = await postCoverageRun(securities);
       const updated = runResult.symbol_count - runResult.error_count;
       if (runResult.status === "failed" || runResult.error_count > 0) {

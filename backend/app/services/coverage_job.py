@@ -167,6 +167,7 @@ def run_coverage_job(
     trigger: str = "cron",
     market: str = "IN",
     security_ids: list[str] | None = None,
+    security_keys: list[tuple[str, str]] | None = None,
     skip_us_outside_rth: bool = False,
 ) -> SignalRun | None:
     """
@@ -195,7 +196,14 @@ def run_coverage_job(
 
     try:
         universe = expand_coverage(db)
-        if security_ids:
+        if security_keys:
+            allowed_keys = set(security_keys)
+            universe = [
+                s
+                for s in universe
+                if (s.market, s.security_id) in allowed_keys
+            ]
+        elif security_ids:
             allowed = set(security_ids)
             universe = [s for s in universe if s.security_id in allowed]
         else:
@@ -228,10 +236,10 @@ def run_coverage_job(
             db.commit()
 
         if successful_upserts > 0:
-            for idx in db.scalars(
-                select(CoverageIndex).where(CoverageIndex.market == market)
-            ).all():
-                idx.last_run_at = computed_at
+            processed_markets = {sec.market for sec in universe}
+            for idx in db.scalars(select(CoverageIndex)).all():
+                if idx.market in processed_markets:
+                    idx.last_run_at = computed_at
 
         run.error_count = errors
         run.finished_at = datetime.now(timezone.utc)

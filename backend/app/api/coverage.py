@@ -156,14 +156,11 @@ def post_coverage_run(
     db: Session = Depends(get_db),
 ) -> dict:
     security_keys: list[tuple[str, str]] | None = None
-    ids: list[str] | None = None
     if body and body.securities:
         security_keys = [(s.market, s.security_id) for s in body.securities]
-        ids = [s.security_id for s in body.securities]
     try:
         run = run_coverage_job(
             trigger="manual",
-            security_ids=ids if not security_keys else None,
             security_keys=security_keys,
         )
         return {
