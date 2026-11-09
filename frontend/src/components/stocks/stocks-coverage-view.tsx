@@ -15,6 +15,12 @@ import {
   AddCoverageDialog,
   type CoverageChanges,
 } from "@/components/stocks/add-coverage-dialog";
+import {
+  StocksHeaderLastRunSkeleton,
+  StocksLastRunCellSkeleton,
+  StocksLtpCellSkeleton,
+  StocksSignalsCellSkeleton,
+} from "@/components/stocks/stocks-coverage-skeleton";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -162,6 +168,7 @@ export function StocksCoverageView() {
   const [globalLastRun, setGlobalLastRun] = useState<string | null>(null);
   const [rowsLoading, setRowsLoading] = useState(false);
   const [confirmRemoveIndex, setConfirmRemoveIndex] = useState(false);
+  const [rowsError, setRowsError] = useState<string | null>(null);
 
   const indexById = Object.fromEntries(catalog.map((i) => [i.id, i]));
   const allInstruments = mergeCoverageInstruments(coverage, indexMembers);
@@ -220,10 +227,16 @@ export function StocksCoverageView() {
         }
         setRowBySecurityId(map);
         setGlobalLastRun(payload.last_run_at ?? null);
-      } catch {
+        setRowsError(
+          payload.quote_error
+            ? `Live prices unavailable: ${payload.quote_error}`
+            : null
+        );
+      } catch (err) {
         if (!cancelled) {
-          setRowBySecurityId({});
-          setGlobalLastRun(null);
+          setRowsError(
+            err instanceof Error ? err.message : "Could not load coverage rows"
+          );
         }
       } finally {
         if (!cancelled) setRowsLoading(false);
@@ -289,6 +302,11 @@ export function StocksCoverageView() {
         setRowBySecurityId(map);
         setGlobalLastRun(payload.last_run_at ?? null);
         setCoverage(saved);
+        setRowsError(
+          payload.quote_error
+            ? `Live prices unavailable: ${payload.quote_error}`
+            : null
+        );
       } catch {
         // ignore refresh errors after job completion
       }
@@ -367,6 +385,11 @@ export function StocksCoverageView() {
       }
       setRowBySecurityId(map);
       setGlobalLastRun(payload.last_run_at ?? null);
+      setRowsError(
+        payload.quote_error
+          ? `Live prices unavailable: ${payload.quote_error}`
+          : null
+      );
       const saved = await fetchCoverage();
       setCoverage(saved);
       resyncJobStatus();
@@ -465,12 +488,14 @@ export function StocksCoverageView() {
           <p className="mt-1 max-w-2xl text-sm text-[var(--ds-muted)]">
             Cover whole indices or single stocks. Signals refresh hourly for 1h, 4h
             and 1d.
-            {globalLastRun ? (
-              <span className="mt-1 block">
-                Last run {formatLastRun(globalLastRun)}
-              </span>
-            ) : null}
           </p>
+          {bootLoading || rowsLoading ? (
+            <StocksHeaderLastRunSkeleton />
+          ) : globalLastRun ? (
+            <p className="mt-1 text-sm text-[var(--ds-muted)]">
+              Last run {formatLastRun(globalLastRun)}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -506,6 +531,12 @@ export function StocksCoverageView() {
       {runNotice ? (
         <div className="mx-8 mt-4 shrink-0 rounded-lg border border-[var(--ds-hold)] bg-[rgba(210,153,34,0.12)] px-3 py-2 text-sm text-[var(--ds-hold)]">
           {runNotice}
+        </div>
+      ) : null}
+
+      {rowsError ? (
+        <div className="mx-8 mt-4 shrink-0 rounded-lg border border-[var(--ds-hold)] bg-[rgba(210,153,34,0.12)] px-3 py-2 text-sm text-[var(--ds-hold)]">
+          {rowsError}
         </div>
       ) : null}
 
@@ -731,7 +762,9 @@ export function StocksCoverageView() {
                         )}
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {rowData?.ltp != null ? (
+                        {rowsLoading ? (
+                          <StocksLtpCellSkeleton />
+                        ) : rowData?.ltp != null ? (
                           <>
                             <div>{fmtInr(rowData.ltp)}</div>
                             {rowData.change_pct != null ? (
@@ -753,22 +786,32 @@ export function StocksCoverageView() {
                         )}
                       </TableCell>
                       <TableCell className="pl-4">
-                        <div className="flex gap-1">
-                          <SignalDot side={rowData?.signals["1h"] ?? undefined} />
-                          <SignalDot side={rowData?.signals["4h"] ?? undefined} />
-                          <SignalDot side={rowData?.signals["1d"] ?? undefined} />
-                        </div>
-                        {rowData?.error ? (
-                          <p
-                            className="mt-1 max-w-[14rem] truncate text-xs text-[var(--ds-sell)]"
-                            title={rowData.error}
-                          >
-                            {rowData.error}
-                          </p>
-                        ) : null}
+                        {rowsLoading ? (
+                          <StocksSignalsCellSkeleton />
+                        ) : (
+                          <>
+                            <div className="flex gap-1">
+                              <SignalDot side={rowData?.signals["1h"] ?? undefined} />
+                              <SignalDot side={rowData?.signals["4h"] ?? undefined} />
+                              <SignalDot side={rowData?.signals["1d"] ?? undefined} />
+                            </div>
+                            {rowData?.error ? (
+                              <p
+                                className="mt-1 max-w-[14rem] truncate text-xs text-[var(--ds-sell)]"
+                                title={rowData.error}
+                              >
+                                {rowData.error}
+                              </p>
+                            ) : null}
+                          </>
+                        )}
                       </TableCell>
                       <TableCell className="text-xs text-[var(--ds-muted)]">
-                        {formatLastRun(rowData?.last_run_at ?? undefined)}
+                        {rowsLoading ? (
+                          <StocksLastRunCellSkeleton />
+                        ) : (
+                          formatLastRun(rowData?.last_run_at ?? undefined)
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {isManual ? (

@@ -34,9 +34,12 @@ DHAN_API_BASE = "https://api.dhan.co/v2"
 
 DHAN_INTRADAY_MAX_DAYS = 90
 HISTORICAL_CHUNK_DELAY_S = 0.4
+QUOTE_CACHE_TTL_S = 5.0
 RATE_LIMIT_MAX_RETRIES = 5
 RATE_LIMIT_INITIAL_BACKOFF_S = 1.5
 _HISTORICAL_LOCK = threading.Lock()
+_QUOTE_LOCK = threading.Lock()
+_QUOTE_CACHE: dict[str, tuple[float, dict[str, dict[str, float | None]]]] = {}
 IST = ZoneInfo("Asia/Kolkata")
 
 T = TypeVar("T")
@@ -664,7 +667,54 @@ def _resolve_prev_close(
     return None
 
 
-def fetch_market_ohlc(
+def _quote_cache_key(instruments: list[QuoteInstrument]) -> str:
+    pairs = sorted((inst.security_id, inst.exchange_segment) for inst in instruments)
+    return "|".join(f"{sid}:{seg}" for sid, seg in pairs)
+
+
+def _copy_quote_map(
+    m: dict[str, dict[str, float | None]],
+) -> dict[str, dict[str, float | None]]:
+    return {k: dict(v) for k, v in m.items()}
+
+
+def _post_marketfeed_quote(
+    http: httpx.Client,
+    headers: dict[str, str],
+    body: dict[str, list[int]],
+) -> dict[str, Any]:
+    last: Exception | None = None
+    for attempt in range(RATE_LIMIT_MAX_RETRIES):
+        res = http.post(
+            f"{DHAN_API_BASE}/marketfeed/quote",
+            headers=headers,
+            json=body,
+        )
+        rate_limited = res.status_code == 429 or _is_dhan_rate_limit(res.text)
+        if rate_limited:
+            last = RuntimeError(f"Dhan quote rate limited: {res.text[:200]}")
+            if attempt < RATE_LIMIT_MAX_RETRIES - 1:
+                time.sleep(RATE_LIMIT_INITIAL_BACKOFF_S * (2**attempt))
+                continue
+            raise last
+        res.raise_for_status()
+        payload = res.json()
+        if isinstance(payload, dict) and payload.get("status") == "failed":
+            detail = payload.get("data") or payload
+            if _is_dhan_rate_limit(detail):
+                last = RuntimeError(f"Dhan quote failed: {detail}")
+                if attempt < RATE_LIMIT_MAX_RETRIES - 1:
+                    time.sleep(RATE_LIMIT_INITIAL_BACKOFF_S * (2**attempt))
+                    continue
+                raise last
+            raise RuntimeError(f"Dhan quote failed: {detail}")
+        return payload if isinstance(payload, dict) else {}
+    if last is not None:
+        raise last
+    raise RuntimeError("Dhan quote failed")
+
+
+def _fetch_market_ohlc_uncached(
     instruments: list[QuoteInstrument],
 ) -> dict[str, dict[str, float | None]]:
     """
@@ -700,15 +750,7 @@ def fetch_market_ohlc(
             for offset in range(0, len(unique_ids), 1000):
                 chunk = unique_ids[offset : offset + 1000]
                 body = {segment: chunk}
-                res = http.post(
-                    f"{DHAN_API_BASE}/marketfeed/quote",
-                    headers=headers,
-                    json=body,
-                )
-                res.raise_for_status()
-                payload = res.json()
-                if isinstance(payload, dict) and payload.get("status") == "failed":
-                    raise RuntimeError(f"Dhan quote failed: {payload.get('data')}")
+                payload = _post_marketfeed_quote(http, headers, body)
                 data = payload.get("data", payload)
                 segment_data = data.get(segment, {}) if isinstance(data, dict) else {}
                 for sid_key, row in segment_data.items():
@@ -747,3 +789,23 @@ def fetch_market_ohlc(
             row["change_pct"] = _change_pct(row.get("ltp"), row["prev_close"])
 
     return out
+
+
+def fetch_market_ohlc(
+    instruments: list[QuoteInstrument],
+) -> dict[str, dict[str, float | None]]:
+    if not instruments:
+        return {}
+
+    cache_key = _quote_cache_key(instruments)
+    with _QUOTE_LOCK:
+        now = time.time()
+        cached = _QUOTE_CACHE.get(cache_key)
+        if cached is not None:
+            ts, data = cached
+            if now - ts < QUOTE_CACHE_TTL_S:
+                return _copy_quote_map(data)
+
+        fresh = _fetch_market_ohlc_uncached(instruments)
+        _QUOTE_CACHE[cache_key] = (time.time(), _copy_quote_map(fresh))
+        return _copy_quote_map(fresh)

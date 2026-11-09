@@ -57,6 +57,7 @@ class CoverageRowOut(BaseModel):
 
 class CoverageRowsResponse(BaseModel):
     last_run_at: str | None = None
+    quote_error: str | None = None
     rows: list[CoverageRowOut]
 
 
@@ -92,12 +93,18 @@ def get_coverage_rows(db: Session = Depends(get_db)) -> CoverageRowsResponse:
         snaps = snapshots_for_securities(db, [s.security_id for s in universe])
         manual_runs = manual_last_run_map(db)
 
-        quotes = fetch_market_ohlc(
-            [
-                QuoteInstrument(s.security_id, s.exchange_segment)
-                for s in universe
-            ]
-        )
+        quote_error: str | None = None
+        quotes: dict[str, dict] = {}
+        if universe:
+            try:
+                quotes = fetch_market_ohlc(
+                    [
+                        QuoteInstrument(s.security_id, s.exchange_segment)
+                        for s in universe
+                    ]
+                )
+            except Exception as exc:
+                quote_error = str(exc)
 
         rows: list[CoverageRowOut] = []
         for sec in universe:
@@ -140,6 +147,7 @@ def get_coverage_rows(db: Session = Depends(get_db)) -> CoverageRowsResponse:
         global_last = job.finished_at if job and job.finished_at else None
         return CoverageRowsResponse(
             last_run_at=global_last.isoformat() if global_last else None,
+            quote_error=quote_error,
             rows=rows,
         )
     except Exception as exc:

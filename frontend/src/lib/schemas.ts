@@ -172,6 +172,7 @@ export type CoverageRow = z.infer<typeof coverageRowSchema>;
 
 export const coverageRowsResponseSchema = z.object({
   last_run_at: z.string().nullable().optional(),
+  quote_error: z.string().nullable().optional(),
   rows: z.array(coverageRowSchema),
 });
 export type CoverageRowsResponse = z.infer<typeof coverageRowsResponseSchema>;
