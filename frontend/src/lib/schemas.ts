@@ -230,6 +230,17 @@ export const latestRunSchema = z.object({
 });
 export type LatestRun = z.infer<typeof latestRunSchema>;
 
+export const latestJobSchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  started_at: z.string(),
+  finished_at: z.string().nullable(),
+  symbol_count: z.number(),
+  error_count: z.number(),
+  trigger: z.string(),
+});
+export type LatestJob = z.infer<typeof latestJobSchema>;
+
 export const signalMatrixResponseSchema = z.object({
   last_run_at: z.string().nullable(),
   pending_count: z.number(),

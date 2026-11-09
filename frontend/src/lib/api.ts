@@ -9,6 +9,7 @@ import {
   securityInputSchema,
   signalsRequestSchema,
   signalsResponseSchema,
+  latestJobSchema,
   signalCellSchema,
   signalMatrixResponseSchema,
   type CoverageRowsResponse,
@@ -16,6 +17,7 @@ import {
   type IndexMembers,
   type IndicesCatalog,
   type Instrument,
+  type LatestJob,
   type MetaDefaults,
   type SecurityInput,
   type SignalCell,
@@ -202,6 +204,18 @@ export async function fetchSignalMatrix(): Promise<SignalMatrixResponse> {
     );
   }
   return signalMatrixResponseSchema.parse(data);
+}
+
+export async function fetchLatestJob(): Promise<LatestJob | null> {
+  const res = await fetch(`${getApiBaseUrl()}/api/jobs/latest`);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      errorMessage(data, `Could not load latest job (${res.status})`)
+    );
+  }
+  if (data == null) return null;
+  return latestJobSchema.parse(data);
 }
 
 export async function patchSignalStatus(

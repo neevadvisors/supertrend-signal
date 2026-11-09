@@ -10,6 +10,7 @@ import {
   Trash2,
   User,
 } from "lucide-react";
+import { useJobStatus } from "@/components/job-status-provider";
 import {
   AddCoverageDialog,
   type CoverageChanges,
@@ -140,6 +141,8 @@ function SignalDot({ side }: { side?: string }) {
 }
 
 export function StocksCoverageView() {
+  const { running, lastCompletedJob, markJobStarted, resyncJobStatus } =
+    useJobStatus();
   const [catalog, setCatalog] = useState<IndexSummary[]>([]);
   const [coverage, setCoverage] = useState<CoverageState>({ indexIds: [], manual: [] });
   const [indexMembers, setIndexMembers] = useState<IndexMembersMap>({});
@@ -148,7 +151,6 @@ export function StocksCoverageView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
   const [addTab, setAddTab] = useState<AddTab>("indices");
-  const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [runNotice, setRunNotice] = useState<string | null>(null);
   const [bootLoading, setBootLoading] = useState(true);
@@ -270,6 +272,33 @@ export function StocksCoverageView() {
     };
   }, [coverage.indexIds.join(",")]);
 
+  useEffect(() => {
+    if (bootLoading || !lastCompletedJob?.id) return;
+    let cancelled = false;
+    async function refreshAfterJob() {
+      try {
+        const [payload, saved] = await Promise.all([
+          fetchCoverageRows(),
+          fetchCoverage(),
+        ]);
+        if (cancelled) return;
+        const map: Record<string, CoverageRow> = {};
+        for (const row of payload.rows) {
+          map[row.security_id] = row;
+        }
+        setRowBySecurityId(map);
+        setGlobalLastRun(payload.last_run_at ?? null);
+        setCoverage(saved);
+      } catch {
+        // ignore refresh errors after job completion
+      }
+    }
+    void refreshAfterJob();
+    return () => {
+      cancelled = true;
+    };
+  }, [lastCompletedJob?.id, bootLoading]);
+
   const pickScope = (next: Scope) => {
     setScope(next);
     setSelectedIds(new Set());
@@ -310,9 +339,9 @@ export function StocksCoverageView() {
       if (!ok) return;
     }
 
-    setRunning(true);
     setRunError(null);
     setRunNotice(null);
+    markJobStarted();
     try {
       const securities = target.map((inst) => ({
         security_id: inst.security_id,
@@ -340,10 +369,10 @@ export function StocksCoverageView() {
       setGlobalLastRun(payload.last_run_at ?? null);
       const saved = await fetchCoverage();
       setCoverage(saved);
+      resyncJobStatus();
     } catch (err) {
+      resyncJobStatus();
       setRunError(err instanceof Error ? err.message : "Run failed");
-    } finally {
-      setRunning(false);
     }
   }
 
