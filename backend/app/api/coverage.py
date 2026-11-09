@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -11,13 +13,14 @@ from app.models.schemas import InstrumentOut, SecurityInput
 from app.services.coverage_job import run_coverage_job
 from app.services.coverage_service import (
     expand_coverage,
+    fetch_quotes_for_universe,
+    quote_for_security,
     get_coverage_state,
     latest_job,
     manual_last_run_map,
     replace_coverage,
     snapshots_for_securities,
 )
-from src.dhan_client import QuoteInstrument, fetch_market_ohlc
 
 router = APIRouter(prefix="/api/coverage", tags=["coverage"])
 
@@ -42,6 +45,8 @@ class CoverageRowSignals(BaseModel):
 
 
 class CoverageRowOut(BaseModel):
+    market: str = "IN"
+    currency: str = "INR"
     security_id: str
     symbol: str
     display_name: str
@@ -90,21 +95,10 @@ def get_coverage_rows(db: Session = Depends(get_db)) -> CoverageRowsResponse:
     try:
         universe = expand_coverage(db)
         job = latest_job(db)
-        snaps = snapshots_for_securities(db, [s.security_id for s in universe])
+        snaps = snapshots_for_securities(db, universe)
         manual_runs = manual_last_run_map(db)
 
-        quote_error: str | None = None
-        quotes: dict[str, dict] = {}
-        if universe:
-            try:
-                quotes = fetch_market_ohlc(
-                    [
-                        QuoteInstrument(s.security_id, s.exchange_segment)
-                        for s in universe
-                    ]
-                )
-            except Exception as exc:
-                quote_error = str(exc)
+        quotes, quote_error = fetch_quotes_for_universe(universe)
 
         rows: list[CoverageRowOut] = []
         for sec in universe:
@@ -113,7 +107,7 @@ def get_coverage_rows(db: Session = Depends(get_db)) -> CoverageRowsResponse:
             row_error: str | None = None
             latest_error_at: datetime | None = None
             for tf in ("1h", "4h", "1d"):
-                snap = snaps.get((sec.security_id, tf))
+                snap = snaps.get((sec.market, sec.security_id, tf))
                 if snap:
                     sigs[tf] = snap.side
                     if latest_compute is None or snap.computed_at > latest_compute:
@@ -126,10 +120,12 @@ def get_coverage_rows(db: Session = Depends(get_db)) -> CoverageRowsResponse:
                             latest_error_at = snap.computed_at
                             row_error = snap.error
 
-            last_run = manual_runs.get(sec.security_id) or latest_compute
-            q = quotes.get(sec.security_id, {})
+            last_run = manual_runs.get((sec.market, sec.security_id)) or latest_compute
+            q = quote_for_security(quotes, sec)
             rows.append(
                 CoverageRowOut(
+                    market=sec.market,
+                    currency=sec.currency,
                     security_id=sec.security_id,
                     symbol=sec.symbol,
                     display_name=sec.display_name,
@@ -159,11 +155,17 @@ def post_coverage_run(
     body: CoverageRunBody | None = None,
     db: Session = Depends(get_db),
 ) -> dict:
+    security_keys: list[tuple[str, str]] | None = None
     ids: list[str] | None = None
     if body and body.securities:
+        security_keys = [(s.market, s.security_id) for s in body.securities]
         ids = [s.security_id for s in body.securities]
     try:
-        run = run_coverage_job(trigger="manual", security_ids=ids)
+        run = run_coverage_job(
+            trigger="manual",
+            security_ids=ids if not security_keys else None,
+            security_keys=security_keys,
+        )
         return {
             "id": run.id,
             "status": run.status,

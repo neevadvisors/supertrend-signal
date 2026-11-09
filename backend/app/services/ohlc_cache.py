@@ -12,15 +12,22 @@ DEFAULT_TTL_SECONDS = 15 * 60
 
 
 class OhlcCache:
-    """Thread-unsafe in-memory cache keyed by security_id|timeframe|lookback."""
+    """Thread-unsafe in-memory cache keyed by market|security_id|timeframe|lookback."""
 
     def __init__(self, ttl_seconds: int = DEFAULT_TTL_SECONDS) -> None:
         self.ttl_seconds = ttl_seconds
         self._store: dict[str, tuple[float, pd.DataFrame]] = {}
 
     @staticmethod
-    def make_key(security_id: str, timeframe: Timeframe | str, lookback: int) -> str:
-        return f"{security_id}|{timeframe}|{lookback}"
+    def make_key(
+        security_id: str,
+        timeframe: Timeframe | str,
+        lookback: int,
+        *,
+        market: str = "IN",
+    ) -> str:
+        m = (market or "IN").strip().upper()
+        return f"{m}|{security_id}|{timeframe}|{lookback}"
 
     def get(self, key: str) -> pd.DataFrame | None:
         entry = self._store.get(key)

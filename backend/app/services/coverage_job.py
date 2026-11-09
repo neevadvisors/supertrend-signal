@@ -14,13 +14,13 @@ from app.db.session import SessionLocal
 from app.services.coverage_service import CoveredSecurity, expand_coverage
 from src.dhan_client import (
     Timeframe,
-    cache_prev_close,
     default_lookback_for_timeframe,
-    fetch_candles,
-    get_dhan_client,
     prev_close_from_daily_df,
 )
+from src.market_data import provider_for
+from src.prev_close_store import prev_close_from_daily_df_us, set_prev_close
 from src.signals import NeevParams, latest_signal, signal_snapshot_from_latest
+from src.us_session import is_us_rth_session
 
 CRON_TIMEFRAMES: tuple[Timeframe, ...] = ("1h", "4h", "1d")
 DEFAULT_PARAMS = NeevParams()
@@ -36,27 +36,33 @@ def _compute_security(
     run_id: str,
     params: NeevParams,
 ) -> tuple[str, list[dict]]:
-    client = get_dhan_client()
+    prov = provider_for(sec.market)
     snapshots: list[dict] = []
 
     for tf in CRON_TIMEFRAMES:
         try:
-            ohlc = fetch_candles(
+            ohlc = prov.fetch_candles(
                 sec.security_id,
                 exchange_segment=sec.exchange_segment,
                 instrument_type=sec.instrument_type,
                 timeframe=tf,
                 lookback_days=default_lookback_for_timeframe(tf),
-                client=client,
             )
             if tf == "1d":
-                prev = prev_close_from_daily_df(ohlc)
+                if sec.market == "US":
+                    # During US RTH, live quotes (Alpaca snapshot) are authoritative for
+                    # change %; this cache backs after-hours / cron paths (`is_us_rth_session`).
+                    prev = prev_close_from_daily_df_us(ohlc)
+                else:
+                    prev = prev_close_from_daily_df(ohlc)
                 if prev is not None:
-                    cache_prev_close(sec.security_id, prev)
-            raw = latest_signal(ohlc, params, timeframe=tf)
+                    set_prev_close(sec.market, sec.security_id, prev)
+            raw = latest_signal(ohlc, params, timeframe=tf, market=sec.market)
             mapped = signal_snapshot_from_latest(raw, timeframe=tf)
             snapshots.append(
                 {
+                    "market": sec.market,
+                    "currency": sec.currency,
                     "security_id": sec.security_id,
                     "symbol": sec.symbol,
                     "timeframe": tf,
@@ -73,6 +79,8 @@ def _compute_security(
         except Exception as exc:
             snapshots.append(
                 {
+                    "market": sec.market,
+                    "currency": sec.currency,
                     "security_id": sec.security_id,
                     "symbol": sec.symbol,
                     "timeframe": tf,
@@ -87,13 +95,16 @@ def _compute_security(
 
 def _upsert_snapshot(db: Session, row: dict, computed_at: datetime) -> bool:
     """Returns True when a successful snapshot was written or updated."""
-    existing = db.get(SignalSnapshot, (row["security_id"], row["timeframe"]))
+    pk = (row["market"], row["security_id"], row["timeframe"])
+    existing = db.get(SignalSnapshot, pk)
 
     if row.get("failed"):
         err = row.get("error")
         if existing is None:
             db.add(
                 SignalSnapshot(
+                    market=row["market"],
+                    currency=row["currency"],
                     security_id=row["security_id"],
                     timeframe=row["timeframe"],
                     symbol=row["symbol"],
@@ -121,6 +132,8 @@ def _upsert_snapshot(db: Session, row: dict, computed_at: datetime) -> bool:
     if existing is None:
         db.add(
             SignalSnapshot(
+                market=row["market"],
+                currency=row["currency"],
                 security_id=row["security_id"],
                 timeframe=row["timeframe"],
                 symbol=row["symbol"],
@@ -152,8 +165,20 @@ def _upsert_snapshot(db: Session, row: dict, computed_at: datetime) -> bool:
 def run_coverage_job(
     *,
     trigger: str = "cron",
+    market: str = "IN",
     security_ids: list[str] | None = None,
-) -> SignalRun:
+    skip_us_outside_rth: bool = False,
+) -> SignalRun | None:
+    """
+    Run signal computation for one market (IN or US).
+
+    skip_us_outside_rth: when True and market is US, return None without
+    writing a run row if NYSE is not in regular hours (for UTC-aligned crons).
+    """
+    market = market.upper()
+    if skip_us_outside_rth and market == "US" and not is_us_rth_session():
+        return None
+
     run_id = _new_run_id()
     started = datetime.now(timezone.utc)
     db = SessionLocal()
@@ -173,6 +198,8 @@ def run_coverage_job(
         if security_ids:
             allowed = set(security_ids)
             universe = [s for s in universe if s.security_id in allowed]
+        else:
+            universe = [s for s in universe if s.market == market]
 
         run.symbol_count = len(universe)
         db.commit()
@@ -194,14 +221,16 @@ def run_coverage_job(
             elif tf_ok < len(CRON_TIMEFRAMES):
                 pass
 
-            manual = db.get(CoverageManualStock, sid)
+            manual = db.get(CoverageManualStock, (sec.market, sid))
             if manual and tf_ok > 0:
                 manual.last_run_at = computed_at
 
             db.commit()
 
         if successful_upserts > 0:
-            for idx in db.scalars(select(CoverageIndex)).all():
+            for idx in db.scalars(
+                select(CoverageIndex).where(CoverageIndex.market == market)
+            ).all():
                 idx.last_run_at = computed_at
 
         run.error_count = errors

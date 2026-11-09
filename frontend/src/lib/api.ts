@@ -73,13 +73,14 @@ export async function fetchHealth(): Promise<{ status: string }> {
 
 export async function searchInstruments(
   query: string,
-  options?: { limit?: number; refresh?: boolean }
+  options?: { limit?: number; refresh?: boolean; market?: "IN" | "US" }
 ): Promise<Instrument[]> {
   const url = new URL(`${getApiBaseUrl()}/api/instruments`);
   const q = query.trim();
   if (q) url.searchParams.set("q", q);
   if (options?.limit != null) url.searchParams.set("limit", String(options.limit));
   if (options?.refresh) url.searchParams.set("refresh", "true");
+  if (options?.market) url.searchParams.set("market", options.market);
   const res = await fetch(url.toString());
   const data = await parseJson(res);
   if (!res.ok) {
@@ -221,16 +222,18 @@ export async function fetchLatestJob(): Promise<LatestJob | null> {
 export async function patchSignalStatus(
   securityId: string,
   timeframe: string,
-  status: "pending" | "approved" | "skipped"
+  status: "pending" | "approved" | "skipped",
+  market: "IN" | "US" = "IN"
 ): Promise<SignalCell> {
-  const res = await fetch(
-    `${getApiBaseUrl()}/api/signals/${encodeURIComponent(securityId)}/${encodeURIComponent(timeframe)}`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    }
+  const url = new URL(
+    `${getApiBaseUrl()}/api/signals/${encodeURIComponent(securityId)}/${encodeURIComponent(timeframe)}`
   );
+  url.searchParams.set("market", market);
+  const res = await fetch(url.toString(), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
   const data = await parseJson(res);
   if (!res.ok) {
     throw new Error(

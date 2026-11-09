@@ -20,12 +20,20 @@ export const neevParamsSchema = z.object({
 });
 export type NeevParams = z.infer<typeof neevParamsSchema>;
 
+export const marketSchema = z.enum(["IN", "US"]);
+export type Market = z.infer<typeof marketSchema>;
+
+export const currencySchema = z.enum(["INR", "USD"]);
+export type Currency = z.infer<typeof currencySchema>;
+
 export const securityInputSchema = z.object({
   security_id: z.string(),
   symbol: z.string(),
   display_name: z.string(),
   exchange_segment: z.string(),
   instrument_type: z.string(),
+  market: marketSchema.optional(),
+  currency: currencySchema.optional(),
 });
 export type SecurityInput = z.infer<typeof securityInputSchema>;
 
@@ -36,6 +44,8 @@ export const instrumentSchema = z.object({
   exchange_segment: z.string(),
   instrument_type: z.string(),
   display_name: z.string(),
+  market: marketSchema.optional(),
+  currency: currencySchema.optional(),
 });
 export type Instrument = z.infer<typeof instrumentSchema>;
 
@@ -156,6 +166,8 @@ export const coverageRowSchema = z.object({
   symbol: z.string(),
   display_name: z.string(),
   exchange_segment: z.string(),
+  market: marketSchema.optional(),
+  currency: currencySchema.optional(),
   sources: z.array(z.string()),
   manual: z.boolean(),
   ltp: z.number().nullable().optional(),
@@ -207,6 +219,8 @@ export const signalCellSchema = z.object({
   status: z.string(),
   computed_at: z.string(),
   run_id: z.string(),
+  market: marketSchema.optional(),
+  currency: currencySchema.optional(),
 });
 export type SignalCell = z.infer<typeof signalCellSchema>;
 
@@ -215,6 +229,8 @@ export const matrixStockSchema = z.object({
   symbol: z.string(),
   display_name: z.string(),
   exchange_segment: z.string(),
+  market: marketSchema.optional(),
+  currency: currencySchema.optional(),
   sources: z.array(z.string()),
   manual: z.boolean(),
   ltp: z.number().nullable().optional(),

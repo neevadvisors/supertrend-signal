@@ -16,7 +16,7 @@ from app.models.schemas import (
     SignalsResponse,
 )
 from app.services.ohlc_cache import ohlc_cache
-from src.dhan_client import fetch_candles, get_dhan_client
+from src.market_data import provider_for
 from src.signals import latest_signal
 
 
@@ -97,18 +97,19 @@ def compute_signals(request: SignalsRequest) -> SignalsResponse:
     params = request.params.to_neev_params()
     results: list[SignalResult] = []
 
-    try:
-        client = get_dhan_client()
-    except Exception as exc:
-        # Credential / client failure applies to all securities.
-        err = str(exc)
-        return SignalsResponse(
-            results=[_error_result(sec, err) for sec in request.securities]
-        )
-
     for sec in request.securities:
+        market = sec.market
+        try:
+            provider = provider_for(market)
+        except Exception as exc:
+            results.append(_error_result(sec, str(exc)))
+            continue
+
         cache_key = ohlc_cache.make_key(
-            sec.security_id, request.timeframe, request.lookback_days
+            sec.security_id,
+            request.timeframe,
+            request.lookback_days,
+            market=market,
         )
         ohlc: pd.DataFrame | None = None
         if not request.force_refresh:
@@ -116,13 +117,12 @@ def compute_signals(request: SignalsRequest) -> SignalsResponse:
 
         if ohlc is None:
             try:
-                ohlc = fetch_candles(
+                ohlc = provider.fetch_candles(
                     security_id=sec.security_id,
                     exchange_segment=sec.exchange_segment,
                     instrument_type=sec.instrument_type,
                     timeframe=request.timeframe,
                     lookback_days=request.lookback_days,
-                    client=client,
                 )
                 ohlc_cache.set(cache_key, ohlc)
             except Exception as exc:
@@ -130,7 +130,9 @@ def compute_signals(request: SignalsRequest) -> SignalsResponse:
                 continue
 
         try:
-            sig = latest_signal(ohlc, params, timeframe=request.timeframe)
+            sig = latest_signal(
+                ohlc, params, timeframe=request.timeframe, market=market
+            )
             err = sig.get("note") if sig.get("note") else None
             frame_out: list[FrameBar] | None = None
             if request.include_frame:

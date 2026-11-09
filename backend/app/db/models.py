@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Numeric, String, Text, func
+from sqlalchemy import Date, DateTime, Numeric, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -17,6 +17,7 @@ class CoverageIndex(Base):
     __tablename__ = "coverage_indices"
 
     index_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    market: Mapped[str] = mapped_column(String(2), nullable=False, default="IN")
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -24,11 +25,13 @@ class CoverageIndex(Base):
 class CoverageManualStock(Base):
     __tablename__ = "coverage_manual_stocks"
 
+    market: Mapped[str] = mapped_column(String(2), primary_key=True)
     security_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     symbol: Mapped[str] = mapped_column(String(64))
     display_name: Mapped[str] = mapped_column(String(256))
     exchange_segment: Mapped[str] = mapped_column(String(32), default="NSE_EQ")
     instrument_type: Mapped[str] = mapped_column(String(32), default="EQUITY")
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -36,9 +39,11 @@ class CoverageManualStock(Base):
 class SignalSnapshot(Base):
     __tablename__ = "signal_snapshots"
 
+    market: Mapped[str] = mapped_column(String(2), primary_key=True)
     security_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     timeframe: Mapped[str] = mapped_column(String(8), primary_key=True)
     symbol: Mapped[str] = mapped_column(String(64))
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
     run_id: Mapped[str] = mapped_column(String(64))
     side: Mapped[str] = mapped_column(String(8))
     entry: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
@@ -48,6 +53,18 @@ class SignalSnapshot(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="pending")
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PrevClose(Base):
+    __tablename__ = "prev_closes"
+
+    market: Mapped[str] = mapped_column(String(2), primary_key=True)
+    security_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    session_date: Mapped[date] = mapped_column(Date(), primary_key=True)
+    prev_close: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class SignalRun(Base):

@@ -50,21 +50,27 @@ import {
   type IndexSummary,
   type Instrument,
 } from "@/lib/schemas";
+import { fmtPrice, resolveMarket } from "@/lib/format";
 import { formatLastRun } from "@/lib/signal-cache";
 import { cn } from "@/lib/utils";
 
 const LARGE_RUN_WARN = 50;
 
-function fmtInr(price: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 2,
-  }).format(price);
+type Scope = "ALL" | "MANUAL" | string;
+type MarketFilter = "ALL" | "IN" | "US";
+type AddTab = "indices" | "stocks";
+
+function MarketTag({ market }: { market: "IN" | "US" }) {
+  return (
+    <span className="rounded-sm border border-[var(--ds-border)] px-1 py-px font-mono text-[10px] font-semibold leading-none text-[var(--ds-muted)]">
+      {market}
+    </span>
+  );
 }
 
-type Scope = "ALL" | "MANUAL" | string;
-type AddTab = "indices" | "stocks";
+function instrumentMarket(inst: Instrument): "IN" | "US" {
+  return resolveMarket(inst.market, inst.exchange_segment);
+}
 
 function RailItem({
   active,
@@ -153,10 +159,12 @@ export function StocksCoverageView() {
   const [coverage, setCoverage] = useState<CoverageState>({ indexIds: [], manual: [] });
   const [indexMembers, setIndexMembers] = useState<IndexMembersMap>({});
   const [scope, setScope] = useState<Scope>("ALL");
+  const [marketFilter, setMarketFilter] = useState<MarketFilter>("ALL");
   const [q, setQ] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
   const [addTab, setAddTab] = useState<AddTab>("indices");
+  const [addMarket, setAddMarket] = useState<"IN" | "US">("IN");
   const [runError, setRunError] = useState<string | null>(null);
   const [runNotice, setRunNotice] = useState<string | null>(null);
   const [bootLoading, setBootLoading] = useState(true);
@@ -181,7 +189,10 @@ export function StocksCoverageView() {
         ? coverage.manual
         : (indexMembers[scope] ?? []);
 
-  const rows = scoped.filter((s) => {
+  const filtered = scoped.filter((s) => {
+    if (scope === "ALL" && marketFilter !== "ALL") {
+      if (instrumentMarket(s) !== marketFilter) return false;
+    }
     if (!q.trim()) return true;
     const needle = q.trim().toLowerCase();
     return (
@@ -189,6 +200,25 @@ export function StocksCoverageView() {
       s.display_name.toLowerCase().includes(needle)
     );
   });
+
+  const rows =
+    scope === "ALL" && marketFilter === "ALL"
+      ? [...filtered].sort((a, b) => {
+          const ca = rowBySecurityId[a.security_id]?.change_pct;
+          const cb = rowBySecurityId[b.security_id]?.change_pct;
+          const aPct = ca ?? -Infinity;
+          const bPct = cb ?? -Infinity;
+          if (bPct !== aPct) return bPct - aPct;
+          return a.symbol.localeCompare(b.symbol);
+        })
+      : filtered;
+
+  const inIndexIds = coverage.indexIds.filter(
+    (id) => (indexById[id]?.market ?? "IN") !== "US"
+  );
+  const usIndexIds = coverage.indexIds.filter(
+    (id) => (indexById[id]?.market ?? "IN") === "US"
+  );
 
   const manualCount = coverage.manual.length;
 
@@ -322,6 +352,13 @@ export function StocksCoverageView() {
     setSelectedIds(new Set());
     setQ("");
     setConfirmRemoveIndex(false);
+    if (next !== "ALL") setMarketFilter("ALL");
+  };
+
+  const openAddDialog = (tab: AddTab, market: "IN" | "US") => {
+    setAddMarket(market);
+    setAddTab(tab);
+    setAddOpen(true);
   };
 
   const toggleRow = (inst: Instrument) => {
@@ -501,10 +538,7 @@ export function StocksCoverageView() {
           <Button
             variant="outline"
             className="border-[var(--ds-border)]"
-            onClick={() => {
-              setAddTab("indices");
-              setAddOpen(true);
-            }}
+            onClick={() => openAddDialog("indices", "IN")}
           >
             <Plus size={15} /> Manage coverage
           </Button>
@@ -567,7 +601,7 @@ export function StocksCoverageView() {
             <div className="px-2.5 pb-1.5 text-xs font-medium text-[var(--ds-muted)]">
               India indices
             </div>
-            {coverage.indexIds.map((id) => {
+            {inIndexIds.map((id) => {
               const def = indexById[id];
               if (!def) return null;
               const lastRun = coverage.indexLastRun?.[id];
@@ -582,18 +616,46 @@ export function StocksCoverageView() {
                 />
               );
             })}
-            {coverage.indexIds.length === 0 ? (
+            {inIndexIds.length === 0 ? (
               <div className="px-2.5 py-1.5 text-xs text-[var(--ds-muted)]">None added</div>
             ) : null}
             <button
               type="button"
-              onClick={() => {
-                setAddTab("indices");
-                setAddOpen(true);
-              }}
+              onClick={() => openAddDialog("indices", "IN")}
               className="mt-0.5 flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 text-left text-sm text-[var(--ds-muted)] hover:bg-[var(--secondary)] hover:text-[var(--ds-text)]"
             >
               <Plus size={13} /> Add India index
+            </button>
+          </div>
+
+          <div className="mt-5">
+            <div className="px-2.5 pb-1.5 text-xs font-medium text-[var(--ds-muted)]">
+              US indices
+            </div>
+            {usIndexIds.map((id) => {
+              const def = indexById[id];
+              if (!def) return null;
+              const lastRun = coverage.indexLastRun?.[id];
+              return (
+                <RailItem
+                  key={id}
+                  active={scope === id}
+                  onClick={() => pickScope(id)}
+                  label={def.name}
+                  count={indexMembers[id]?.length ?? def.size}
+                  sub={lastRun ? `Last run ${formatLastRun(lastRun)}` : "Not run yet"}
+                />
+              );
+            })}
+            {usIndexIds.length === 0 ? (
+              <div className="px-2.5 py-1.5 text-xs text-[var(--ds-muted)]">None added</div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => openAddDialog("indices", "US")}
+              className="mt-0.5 flex w-full items-center gap-1.5 rounded-md px-2.5 py-1.5 text-left text-sm text-[var(--ds-muted)] hover:bg-[var(--secondary)] hover:text-[var(--ds-text)]"
+            >
+              <Plus size={13} /> Add US index
             </button>
           </div>
         </nav>
@@ -647,12 +709,39 @@ export function StocksCoverageView() {
           ) : null}
 
           <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-4">
-            <div className="text-sm font-medium text-[var(--ds-text)]">
-              {scope === "MANUAL"
-                ? "Individual stocks"
-                : scope === "ALL"
-                  ? "All in coverage"
-                  : "Index constituents"}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="text-sm font-medium text-[var(--ds-text)]">
+                {scope === "MANUAL"
+                  ? "Individual stocks"
+                  : scope === "ALL"
+                    ? "All in coverage"
+                    : "Index constituents"}
+              </div>
+              {scope === "ALL" ? (
+                <div className="flex rounded-md border border-[var(--ds-border)] p-0.5">
+                  {(
+                    [
+                      ["ALL", "All"],
+                      ["IN", "IN"],
+                      ["US", "US"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setMarketFilter(id)}
+                      className={cn(
+                        "rounded-sm px-2.5 py-1 text-xs",
+                        marketFilter === id
+                          ? "bg-[var(--secondary)] font-medium text-[var(--ds-text)]"
+                          : "text-[var(--ds-muted)] hover:text-[var(--ds-text)]"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <div className="flex w-full max-w-xs items-center gap-2 rounded-md border border-[var(--ds-border)] bg-[var(--ds-surface)] px-2.5 py-1.5 sm:w-72">
               <Search size={14} className="text-[var(--ds-muted)]" />
@@ -735,7 +824,12 @@ export function StocksCoverageView() {
                         <RowCheckbox on={on} />
                       </TableCell>
                       <TableCell>
-                        <div className="font-mono font-medium">{s.symbol}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-medium">{s.symbol}</span>
+                          {scope === "ALL" && marketFilter === "ALL" ? (
+                            <MarketTag market={instrumentMarket(s)} />
+                          ) : null}
+                        </div>
                         <div className="text-xs text-[var(--ds-muted)]">{s.display_name}</div>
                       </TableCell>
                       <TableCell>
@@ -766,7 +860,13 @@ export function StocksCoverageView() {
                           <StocksLtpCellSkeleton />
                         ) : rowData?.ltp != null ? (
                           <>
-                            <div>{fmtInr(rowData.ltp)}</div>
+                            <div>
+                              {fmtPrice(rowData.ltp, {
+                                currency: rowData.currency,
+                                market: rowData.market ?? instrumentMarket(s),
+                                exchange_segment: s.exchange_segment,
+                              })}
+                            </div>
                             {rowData.change_pct != null ? (
                               <div
                                 className={cn(
@@ -846,10 +946,7 @@ export function StocksCoverageView() {
                           </div>
                           <Button
                             className="mt-4"
-                            onClick={() => {
-                              setAddTab("indices");
-                              setAddOpen(true);
-                            }}
+                            onClick={() => openAddDialog("indices", "IN")}
                           >
                             <Plus size={15} /> Manage coverage
                           </Button>
@@ -875,6 +972,7 @@ export function StocksCoverageView() {
         addedIndexIds={coverage.indexIds}
         existingManual={coverage.manual}
         initialTab={addTab}
+        initialMarket={addMarket}
         onUpdateCoverage={handleUpdateCoverage}
       />
     </div>

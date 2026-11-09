@@ -13,6 +13,7 @@ import pandas as pd
 
 from src.dhan_client import Timeframe
 from src.indicators import adx, atr
+from src.us_session import ET, UTC, is_half_session_day, us_4h_bar_end
 
 IST = ZoneInfo("Asia/Kolkata")
 MIN_BARS = 100
@@ -42,8 +43,9 @@ def _nz(value: float | None, replacement: float = 0.0) -> float:
 def drop_forming_candle(
     ohlc: pd.DataFrame,
     timeframe: Timeframe,
+    market: str = "IN",
 ) -> pd.DataFrame:
-    """Drop the last bar if its interval has not finished (IST)."""
+    """Drop the last bar if its interval has not finished (IST for IN, ET for US)."""
     if ohlc is None or ohlc.empty:
         return ohlc
 
@@ -51,6 +53,32 @@ def drop_forming_candle(
     last_ts = df.iloc[-1]["timestamp"]
     if pd.isna(last_ts):
         return df
+
+    m = (market or "IN").strip().upper()
+    if m in ("US", "USA", "NYSE"):
+        now = datetime.now(tz=ET)
+        ts = pd.Timestamp(last_ts)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize(UTC)
+        else:
+            ts = ts.tz_convert(ET)
+
+        if timeframe == "1d":
+            day = ts.date()
+            close_et = datetime.combine(day, datetime.min.time(), tzinfo=ET)
+            if is_half_session_day(day):
+                bar_end = close_et + timedelta(hours=13)
+            else:
+                bar_end = close_et + timedelta(hours=16)
+        elif timeframe == "4h":
+            bar_end = us_4h_bar_end(ts)
+        else:
+            delta = timedelta(minutes=TimeframeMinutes[timeframe])
+            bar_end = ts + delta
+
+        if now < bar_end:
+            return df.iloc[:-1].reset_index(drop=True)
+        return df.reset_index(drop=True)
 
     now_ist = datetime.now(tz=IST)
     ts = pd.Timestamp(last_ts)
@@ -353,6 +381,7 @@ def latest_signal(
     ohlc: pd.DataFrame,
     params: NeevParams | None = None,
     timeframe: Timeframe = "15m",
+    market: str = "IN",
 ) -> dict[str, Any]:
     """
     Latest confirmed-bar NEEV supertrend summary.
@@ -376,7 +405,7 @@ def latest_signal(
         base_empty["note"] = "No OHLC data"
         return base_empty
 
-    trimmed = drop_forming_candle(ohlc, timeframe)
+    trimmed = drop_forming_candle(ohlc, timeframe, market=market)
     if len(trimmed) < MIN_BARS:
         last = trimmed.iloc[-1] if len(trimmed) else None
         base_empty.update(

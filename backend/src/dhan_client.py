@@ -16,6 +16,11 @@ from zoneinfo import ZoneInfo
 
 from pathlib import Path
 
+from src.prev_close_store import (
+    get_prev_close,
+    in_change_reference_date,
+    set_prev_close,
+)
 from src.token_manager import get_valid_access_token
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -431,11 +436,8 @@ class QuoteInstrument:
         self.exchange_segment = exchange_segment
 
 
-# sid -> (prev_close, for_date ISO); memory + data/prev_closes.json (warm-start only)
-_PREV_CLOSE_CACHE: dict[str, tuple[float, str]] = {}
-_PREV_CLOSE_PATH = PROJECT_ROOT / "data" / "prev_closes.json"
+_IN_MARKET = "IN"
 _PREV_CLOSE_LOCK = threading.Lock()
-_PREV_CLOSE_LOADED = False
 _PREV_CLOSE_WARM_RUNNING = False
 
 
@@ -450,10 +452,7 @@ def _is_nse_cash_session(now: datetime | None = None) -> bool:
 
 def _change_reference_date(now: datetime | None = None) -> date:
     """IST calendar date that day-change % is measured against (Fri on weekends)."""
-    current = now or datetime.now(IST)
-    while current.weekday() >= 5:
-        current = current - timedelta(days=1)
-    return current.date()
+    return in_change_reference_date(now)
 
 
 def _df_bar_dates(df: pd.DataFrame) -> pd.Series:
@@ -471,75 +470,13 @@ def _change_pct(ltp: float | None, prev_close: float | None) -> float | None:
     return (ltp - prev_close) / prev_close * 100.0
 
 
-def _load_prev_close_file() -> None:
-    global _PREV_CLOSE_LOADED
-    if _PREV_CLOSE_LOADED:
-        return
-    with _PREV_CLOSE_LOCK:
-        if _PREV_CLOSE_LOADED:
-            return
-        try:
-            import json
-
-            raw = json.loads(_PREV_CLOSE_PATH.read_text())
-            ref = _change_reference_date().isoformat()
-            if isinstance(raw, dict):
-                for sid, item in raw.items():
-                    if not isinstance(item, dict):
-                        continue
-                    prev = item.get("prev_close")
-                    for_date = item.get("for_date")
-                    if prev is None or for_date is None:
-                        continue
-                    if str(for_date) != ref:
-                        continue
-                    _PREV_CLOSE_CACHE[str(sid)] = (float(prev), str(for_date))
-        except FileNotFoundError:
-            pass
-        except Exception:
-            pass
-        _PREV_CLOSE_LOADED = True
-
-
-def _persist_prev_close_file() -> None:
-    import json
-
-    ref = _change_reference_date().isoformat()
-    payload = {
-        sid: {"prev_close": prev, "for_date": for_date}
-        for sid, (prev, for_date) in _PREV_CLOSE_CACHE.items()
-        if for_date == ref
-    }
-    _PREV_CLOSE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = _PREV_CLOSE_PATH.with_suffix(".tmp")
-    tmp.write_text(json.dumps(payload))
-    tmp.replace(_PREV_CLOSE_PATH)
-
-
-def cache_prev_close(security_id: str, prev_close: float) -> None:
+def cache_prev_close(security_id: str, prev_close: float, *, market: str = _IN_MARKET) -> None:
     """Remember previous session close for the current change-reference day."""
-    if prev_close == 0:
-        return
-    _load_prev_close_file()
-    for_date = _change_reference_date().isoformat()
-    with _PREV_CLOSE_LOCK:
-        _PREV_CLOSE_CACHE[str(security_id)] = (float(prev_close), for_date)
-        try:
-            _persist_prev_close_file()
-        except Exception:
-            pass
+    set_prev_close(market, security_id, prev_close)
 
 
-def cached_prev_close(security_id: str) -> float | None:
-    _load_prev_close_file()
-    ref = _change_reference_date().isoformat()
-    entry = _PREV_CLOSE_CACHE.get(str(security_id))
-    if entry is None:
-        return None
-    prev, for_date = entry
-    if for_date != ref:
-        return None
-    return prev
+def cached_prev_close(security_id: str, *, market: str = _IN_MARKET) -> float | None:
+    return get_prev_close(market, security_id)
 
 
 def prev_close_from_daily_df(
@@ -619,7 +556,6 @@ def _warm_prev_closes(instruments: list[QuoteInstrument]) -> None:
 def _ensure_prev_close_warm(instruments: list[QuoteInstrument]) -> None:
     """Fill after-hours prev-close cache in the background (avoids slow /rows)."""
     global _PREV_CLOSE_WARM_RUNNING
-    _load_prev_close_file()
     missing = [
         inst
         for inst in instruments

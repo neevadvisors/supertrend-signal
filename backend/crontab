@@ -1,1 +1,7 @@
-0 * * * * /app/docker-entrypoint.sh job
+# India (NSE): hourly UTC — `run_coverage_signals --market IN`, trigger cron_in
+0 * * * * /app/docker-entrypoint.sh job -- --market IN
+
+# US (NYSE): hourly during regular cash session (America/New_York).
+# Runs at :30 ET from 09:30 through 15:30 Mon–Fri (supercronic uses CRON_TZ when set on worker).
+# Approximate UTC (EDT): 13:30–19:30 Mon–Fri — use --skip-us-outside-rth to no-op off-hours.
+30 13-19 * * 1-5 /app/docker-entrypoint.sh job -- --market US --skip-us-outside-rth

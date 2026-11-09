@@ -32,6 +32,7 @@ type AddCoverageDialogProps = {
   addedIndexIds: string[];
   existingManual: Instrument[];
   initialTab?: AddTab;
+  initialMarket?: "IN" | "US";
   onUpdateCoverage: (changes: CoverageChanges) => void;
 };
 
@@ -88,9 +89,11 @@ export function AddCoverageDialog({
   addedIndexIds,
   existingManual,
   initialTab = "indices",
+  initialMarket = "IN",
   onUpdateCoverage,
 }: AddCoverageDialogProps) {
   const [tab, setTab] = useState<AddTab>(initialTab);
+  const [market, setMarket] = useState<"IN" | "US">(initialMarket);
   const [q, setQ] = useState("");
   const [pickedIdx, setPickedIdx] = useState<string[]>([]);
   const [pickedStk, setPickedStk] = useState<Instrument[]>([]);
@@ -112,10 +115,11 @@ export function AddCoverageDialog({
   useEffect(() => {
     if (!open) return;
     setTab(initialTab);
+    setMarket(initialMarket);
     setPickedIdx([...addedIndexIds]);
     setPickedStk([...existingManual]);
     setQ("");
-  }, [open, initialTab, addedIndexIds, existingManual]);
+  }, [open, initialTab, initialMarket, addedIndexIds, existingManual]);
 
   useEffect(() => {
     const trimmed = q.trim();
@@ -125,7 +129,8 @@ export function AddCoverageDialog({
     }
     let cancelled = false;
     setPopularLoading(true);
-    void fetchIndexMembers("nifty50")
+    const popularIndexId = market === "US" ? "dow30" : "nifty50";
+    void fetchIndexMembers(popularIndexId)
       .then((payload) => {
         if (cancelled) return;
         const byId = new Map<string, Instrument>();
@@ -148,7 +153,7 @@ export function AddCoverageDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, tab, q]);
+  }, [open, tab, q, market]);
 
   useEffect(() => {
     const trimmed = q.trim();
@@ -158,7 +163,7 @@ export function AddCoverageDialog({
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setSearching(true);
-      void searchInstruments(trimmed, { limit: 40 })
+      void searchInstruments(trimmed, { limit: 40, market })
         .then((rows) => {
           if (!cancelled) setSearchResults(rows);
         })
@@ -173,11 +178,15 @@ export function AddCoverageDialog({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open, tab, q]);
+  }, [open, tab, q, market]);
+
+  const catalogForMarket = catalog.filter(
+    (i) => (i.market === "US" ? "US" : "IN") === market
+  );
 
   const indexGroups = TIER_ORDER.map((tier) => ({
     tier,
-    items: catalog.filter((i) => i.tier === tier),
+    items: catalogForMarket.filter((i) => i.tier === tier),
   })).filter((g) => g.items.length > 0);
 
   const addIdx = pickedIdx.filter((id) => !addedIndexIds.includes(id));
@@ -239,7 +248,7 @@ export function AddCoverageDialog({
           </button>
         </DialogHeader>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 px-5 pt-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-5 pt-4">
           <div className="flex rounded-md border border-[var(--ds-border)] p-0.5">
             {(
               [
@@ -262,10 +271,40 @@ export function AddCoverageDialog({
               </button>
             ))}
           </div>
+          <div className="flex rounded-md border border-[var(--ds-border)] p-0.5">
+            {(
+              [
+                ["IN", "India"],
+                ["US", "US"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setMarket(id);
+                  setQ("");
+                }}
+                className={cn(
+                  "rounded-sm px-3 py-1.5 text-sm",
+                  market === id
+                    ? "bg-[var(--secondary)] font-medium text-[var(--ds-text)]"
+                    : "text-[var(--ds-muted)] hover:text-[var(--ds-text)]"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {tab === "indices" ? (
           <div className="mt-3 min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+            {indexGroups.length === 0 ? (
+              <div className="py-10 text-center text-sm text-[var(--ds-muted)]">
+                No {market === "US" ? "US" : "India"} indices in catalog yet.
+              </div>
+            ) : null}
             {indexGroups.map((g) => (
               <div key={g.tier} className="mb-1">
                 <div className="px-3 pt-2 pb-1 text-xs font-medium text-[var(--ds-muted)]">

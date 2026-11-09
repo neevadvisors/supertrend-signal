@@ -36,6 +36,24 @@
       "size": 50,
       "blurb": "The next 50 companies after NIFTY 50 by free-float market cap.",
       "refreshed_at": "2026-11-07"
+    },
+    {
+      "id": "dow30",
+      "name": "Dow Jones Industrial Average",
+      "market": "US",
+      "tier": "Large cap",
+      "size": 30,
+      "blurb": "30 large U.S. blue-chip companies price-weighted in the DJIA.",
+      "refreshed_at": "2026-11-07"
+    },
+    {
+      "id": "nasdaq100",
+      "name": "NASDAQ-100",
+      "market": "US",
+      "tier": "Large cap",
+      "size": 100,
+      "blurb": "100 largest non-financial companies listed on Nasdaq (101 share classes).",
+      "refreshed_at": "2026-11-07"
     }
   ]
 }

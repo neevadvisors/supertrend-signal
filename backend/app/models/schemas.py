@@ -10,6 +10,8 @@ from src.signals import NeevParams
 
 
 TimeframeLiteral = Literal["15m", "1h", "4h", "1d"]
+MarketLiteral = Literal["IN", "US"]
+CurrencyLiteral = Literal["INR", "USD"]
 
 
 class NeevParamsSchema(BaseModel):
@@ -37,6 +39,8 @@ class SecurityInput(BaseModel):
     display_name: str
     exchange_segment: str = "NSE_EQ"
     instrument_type: str = "EQUITY"
+    market: MarketLiteral = "IN"
+    currency: CurrencyLiteral = "INR"
 
 
 class InstrumentOut(BaseModel):
@@ -46,6 +50,8 @@ class InstrumentOut(BaseModel):
     exchange_segment: str
     instrument_type: str
     display_name: str
+    market: MarketLiteral = "IN"
+    currency: CurrencyLiteral = "INR"
 
 
 class IndexSummary(BaseModel):

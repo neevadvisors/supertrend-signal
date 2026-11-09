@@ -1,4 +1,4 @@
-"""Load NSE index constituent lists and resolve to Dhan instruments."""
+"""Load index constituent lists; resolve India members via Dhan scrip master."""
 
 from __future__ import annotations
 
@@ -43,12 +43,49 @@ def load_index_doc(index_id: str) -> dict:
     return doc
 
 
+def _us_member_ready(row: dict) -> bool:
+    return row.get("exchange_segment") == "US_EQ" or row.get("market") == "US"
+
+
+def _finalize_us_member(row: dict) -> dict:
+    """Ensure API-shaped instrument fields; US lists are pre-resolved in JSON."""
+    out = dict(row)
+    symbol = str(out.get("symbol") or "").strip().upper()
+    display = str(out.get("display_name") or symbol).strip()
+    if not out.get("label"):
+        out["label"] = f"{symbol} — {display}" if display and display != symbol else symbol
+    out.setdefault("symbol", symbol)
+    out.setdefault("security_id", symbol)
+    out.setdefault("exchange_segment", "US_EQ")
+    out.setdefault("instrument_type", "EQUITY")
+    return out
+
+
 def resolve_index_members(
     index_id: str,
     *,
     force_refresh: bool = False,
 ) -> dict:
     doc = load_index_doc(index_id)
+    market = doc.get("market", "IN")
+    preset = doc.get("members")
+    if market == "US" or (preset and all(_us_member_ready(m) for m in preset)):
+        members = [_finalize_us_member(m) for m in (preset or [])]
+        unresolved = list(doc.get("unresolved") or [])
+        return {
+            "id": doc["id"],
+            "name": doc["name"],
+            "market": market,
+            "tier": doc.get("tier", ""),
+            "size": doc.get("size", len(members)),
+            "blurb": doc.get("blurb", ""),
+            "refreshed_at": doc.get("refreshed_at", ""),
+            "members": members,
+            "unresolved": unresolved,
+            "resolved_count": len(members),
+            "unresolved_count": len(unresolved),
+        }
+
     members: list[dict] = []
     unresolved: list[dict] = []
     for symbol in doc.get("symbols", []):
@@ -61,7 +98,7 @@ def resolve_index_members(
     return {
         "id": doc["id"],
         "name": doc["name"],
-        "market": doc.get("market", "IN"),
+        "market": market,
         "tier": doc.get("tier", ""),
         "size": doc.get("size", len(doc.get("symbols", []))),
         "blurb": doc.get("blurb", ""),

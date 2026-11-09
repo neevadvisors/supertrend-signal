@@ -13,7 +13,8 @@ case "$1" in
     exec supercronic /app/crontab
     ;;
   job)
-    exec python scripts/run_coverage_signals.py
+    shift
+    exec python scripts/run_coverage_signals.py "$@"
     ;;
   *)
     exec "$@"

@@ -32,17 +32,21 @@ import {
   type SignalMatrixResponse,
   type MatrixStock,
 } from "@/lib/schemas";
+import { fmtPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type View = "review" | "all";
 type SourceFilter = "ALL" | "MANUAL" | string;
 
-function fmtInr(price: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 2,
-  }).format(price);
+function fmtPriceForStock(
+  price: number,
+  stock: Pick<MatrixStock, "market" | "currency" | "exchange_segment">
+): string {
+  return fmtPrice(price, {
+    currency: stock.currency,
+    market: stock.market,
+    exchange_segment: stock.exchange_segment,
+  });
 }
 
 function pct(entry: number, target: number): number {
@@ -50,8 +54,12 @@ function pct(entry: number, target: number): number {
   return ((target - entry) / entry) * 100;
 }
 
-function cellKey(securityId: string, tf: string) {
-  return `${securityId}:${tf}`;
+function cellKey(securityId: string, tf: string, market: string = "IN") {
+  return `${market}:${securityId}:${tf}`;
+}
+
+function stockKey(securityId: string, market: string = "IN") {
+  return `${market}:${securityId}`;
 }
 
 function tfLabel(tf: ReviewTimeframe): string {
@@ -189,14 +197,18 @@ export function SignalsReviewView() {
   const cellMap = useMemo(() => {
     const m = new Map<string, SignalCell>();
     if (!data) return m;
-    for (const c of data.cells) m.set(cellKey(c.security_id, c.timeframe), c);
+    for (const c of data.cells) {
+      m.set(cellKey(c.security_id, c.timeframe, c.market ?? "IN"), c);
+    }
     return m;
   }, [data]);
 
   const stocksById = useMemo(() => {
     const m = new Map<string, MatrixStock>();
     if (!data) return m;
-    for (const s of data.stocks) m.set(s.security_id, s);
+    for (const s of data.stocks) {
+      m.set(stockKey(s.security_id, s.market ?? "IN"), s);
+    }
     return m;
   }, [data]);
 
@@ -213,7 +225,10 @@ export function SignalsReviewView() {
       .filter(matchesSource)
       .map((stock) => {
         const cells = REVIEW_TIMEFRAMES.map(
-          (tf) => cellMap.get(cellKey(stock.security_id, tf.id)) ?? null
+          (tf) =>
+            cellMap.get(
+              cellKey(stock.security_id, tf.id, stock.market ?? "IN")
+            ) ?? null
         );
         const buys = cells.filter((c) => c?.side === "BUY").length;
         const sells = cells.filter((c) => c?.side === "SELL").length;
@@ -229,7 +244,9 @@ export function SignalsReviewView() {
 
   const selectedCell = selectedKey ? cellMap.get(selectedKey) : undefined;
   const selectedStock = selectedCell
-    ? stocksById.get(selectedCell.security_id)
+    ? stocksById.get(
+        stockKey(selectedCell.security_id, selectedCell.market ?? "IN")
+      )
     : undefined;
 
   const load = async () => {
@@ -247,7 +264,13 @@ export function SignalsReviewView() {
         (c) => c.status === "pending" && c.side !== "NONE"
       );
       if (firstPending && !selectedKey) {
-        setSelectedKey(cellKey(firstPending.security_id, firstPending.timeframe));
+        setSelectedKey(
+          cellKey(
+            firstPending.security_id,
+            firstPending.timeframe,
+            firstPending.market ?? "IN"
+          )
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load signals");
@@ -263,7 +286,7 @@ export function SignalsReviewView() {
   const nextPendingKey = (afterKey: string) => {
     if (!data) return null;
     for (const c of data.cells) {
-      const k = cellKey(c.security_id, c.timeframe);
+      const k = cellKey(c.security_id, c.timeframe, c.market ?? "IN");
       if (
         k !== afterKey &&
         c.status === "pending" &&
@@ -279,7 +302,9 @@ export function SignalsReviewView() {
     setData((prev) => {
       if (!prev) return prev;
       const cells = prev.cells.map((c) =>
-        c.security_id === patched.security_id && c.timeframe === patched.timeframe
+        c.security_id === patched.security_id &&
+        c.timeframe === patched.timeframe &&
+        (c.market ?? "IN") === (patched.market ?? "IN")
           ? patched
           : c
       );
@@ -297,7 +322,8 @@ export function SignalsReviewView() {
       const patched = await patchSignalStatus(
         selectedCell.security_id,
         selectedCell.timeframe,
-        "skipped"
+        "skipped",
+        selectedCell.market ?? "IN"
       );
       applyCellPatch(patched);
       const n = nextPendingKey(selectedKey!);
@@ -316,7 +342,8 @@ export function SignalsReviewView() {
       const patched = await patchSignalStatus(
         selectedCell.security_id,
         selectedCell.timeframe,
-        "pending"
+        "pending",
+        selectedCell.market ?? "IN"
       );
       applyCellPatch(patched);
     } catch (e) {
@@ -434,7 +461,7 @@ export function SignalsReviewView() {
 
             {rows.map((r) => (
               <div
-                key={r.stock.security_id}
+                key={stockKey(r.stock.security_id, r.stock.market ?? "IN")}
                 className="grid grid-cols-[minmax(170px,1.2fr)_repeat(3,minmax(150px,1fr))_110px] border-b border-[var(--ds-border)] last:border-0"
               >
                 <div className="px-4 py-3">
@@ -446,18 +473,24 @@ export function SignalsReviewView() {
                   </div>
                   {r.stock.ltp != null ? (
                     <div className="mt-0.5 font-mono text-xs text-[var(--ds-muted)]">
-                      {fmtInr(r.stock.ltp)}
+                      {fmtPriceForStock(r.stock.ltp, r.stock)}
                     </div>
                   ) : null}
                 </div>
                 {r.cells.map((c, i) =>
                   c ? (
                     <MatrixCell
-                      key={c.security_id + c.timeframe}
+                      key={cellKey(c.security_id, c.timeframe, c.market ?? "IN")}
                       cell={c}
-                      active={selectedKey === cellKey(c.security_id, c.timeframe)}
+                      stock={r.stock}
+                      active={
+                        selectedKey ===
+                        cellKey(c.security_id, c.timeframe, c.market ?? "IN")
+                      }
                       onSelect={() =>
-                        setSelectedKey(cellKey(c.security_id, c.timeframe))
+                        setSelectedKey(
+                          cellKey(c.security_id, c.timeframe, c.market ?? "IN")
+                        )
                       }
                     />
                   ) : (
@@ -490,10 +523,18 @@ export function SignalsReviewView() {
               siblings={REVIEW_TIMEFRAMES.map(
                 (tf) =>
                   cellMap.get(
-                    cellKey(selectedCell.security_id, tf.id)
+                    cellKey(
+                      selectedCell.security_id,
+                      tf.id,
+                      selectedCell.market ?? "IN"
+                    )
                   ) ?? undefined
               )}
-              onPick={(c) => setSelectedKey(cellKey(c.security_id, c.timeframe))}
+              onPick={(c) =>
+                setSelectedKey(
+                  cellKey(c.security_id, c.timeframe, c.market ?? "IN")
+                )
+              }
               onSkip={handleSkip}
               onRevert={handleRevert}
               loading={actionLoading}
@@ -558,10 +599,12 @@ function MatrixEmpty({
 
 function MatrixCell({
   cell,
+  stock,
   active,
   onSelect,
 }: {
   cell: SignalCell;
+  stock: MatrixStock;
   active: boolean;
   onSelect: () => void;
 }) {
@@ -603,7 +646,7 @@ function MatrixCell({
             dim ? "text-[var(--ds-muted)]" : "text-[var(--ds-text)]"
           )}
         >
-          {fmtInr(cell.entry)}
+          {fmtPriceForStock(cell.entry, stock)}
           <span
             className={cn(
               "ml-1.5",
@@ -697,8 +740,8 @@ function ReviewPanel({
                 onClick={() => onPick(sib)}
                 className={cn(
                   "flex flex-col items-center gap-0.5 rounded-sm py-1.5 text-xs",
-                  cellKey(sib.security_id, sib.timeframe) ===
-                    cellKey(cell.security_id, cell.timeframe)
+                  cellKey(sib.security_id, sib.timeframe, sib.market ?? "IN") ===
+                    cellKey(cell.security_id, cell.timeframe, cell.market ?? "IN")
                     ? "bg-[var(--ds-surface)] font-medium shadow-sm"
                     : "text-[var(--ds-muted)] hover:text-[var(--ds-text)]"
                 )}
@@ -733,17 +776,17 @@ function ReviewPanel({
         <>
           <div className="px-6 py-4">
             <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-[var(--ds-border)] bg-[var(--ds-border)]">
-              <Level label="Entry" value={fmtInr(entry)} />
+              <Level label="Entry" value={fmtPriceForStock(entry, stock)} />
               <Level label="Risk : reward" value={`1 : ${rr.toFixed(1)}`} />
               <Level
                 label="Target"
-                value={fmtInr(target)}
+                value={fmtPriceForStock(target, stock)}
                 hint={`${up > 0 ? "+" : ""}${up.toFixed(1)}%`}
                 tone="buy"
               />
               <Level
                 label="Stop-loss"
-                value={fmtInr(stop)}
+                value={fmtPriceForStock(stop, stock)}
                 hint={`${down > 0 ? "+" : ""}${down.toFixed(1)}%`}
                 tone="sell"
               />
