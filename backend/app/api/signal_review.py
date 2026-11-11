@@ -9,6 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.db.models import SignalSnapshot
 from app.db.session import get_db
+from app.services.published_post_service import (
+    create_post_for_signal,
+    delete_post_for_signal,
+    find_post_for_signal,
+)
 from app.services.coverage_service import (
     expand_coverage,
     fetch_quotes_for_universe,
@@ -176,6 +181,11 @@ def patch_signal_status(
     if row is None:
         raise HTTPException(status_code=404, detail="Signal not found")
     row.status = body.status
+    if body.status == "approved":
+        if find_post_for_signal(db, market, security_id, timeframe) is None:
+            create_post_for_signal(db, row)
+    elif body.status == "pending":
+        delete_post_for_signal(db, market, security_id, timeframe)
     db.commit()
     db.refresh(row)
     return SignalCellOut(

@@ -3,23 +3,28 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Cpu, ListChecks, Radar } from "lucide-react";
-import { fetchSignalMatrix } from "@/lib/api";
+import { Cpu, Grid3x3, ListChecks, Radar } from "lucide-react";
+import { fetchPosts, fetchSignalMatrix } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/stocks", label: "Stocks", icon: ListChecks },
   { href: "/", label: "Signals", icon: Radar },
+  { href: "/posts", label: "Posts", icon: Grid3x3 },
 ] as const;
 
 export function AppSidebar() {
   const pathname = usePathname();
   const [pendingCount, setPendingCount] = useState<number | null>(null);
+  const [postsCount, setPostsCount] = useState<number | null>(null);
 
   useEffect(() => {
     fetchSignalMatrix()
       .then((m) => setPendingCount(m.pending_count))
       .catch(() => setPendingCount(null));
+    fetchPosts()
+      .then((p) => setPostsCount(p.totals.count))
+      .catch(() => setPostsCount(null));
   }, []);
 
   return (
@@ -59,6 +64,13 @@ export function AppSidebar() {
               {item.href === "/" && pendingCount != null && pendingCount > 0 ? (
                 <span className="rounded-sm bg-[color-mix(in_srgb,var(--ds-hold)_22%,transparent)] px-1.5 py-0.5 font-mono text-xs text-[var(--ds-hold)]">
                   {pendingCount}
+                </span>
+              ) : null}
+              {item.href === "/posts" &&
+              postsCount != null &&
+              postsCount > 0 ? (
+                <span className="rounded-sm bg-[var(--secondary)] px-1.5 py-0.5 font-mono text-xs text-[var(--ds-muted)]">
+                  {postsCount}
                 </span>
               ) : null}
             </Link>

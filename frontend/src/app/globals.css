@@ -93,6 +93,15 @@
   --sidebar-accent-foreground: #e6edf3;
   --sidebar-border: #2d333b;
   --sidebar-ring: #8b949e;
+
+  --post-night: #0a1812;
+  --post-night-2: #12271d;
+  --post-night-ink: #e9f0ea;
+  --post-night-muted: #8ba698;
+  --post-night-rule: #21402f;
+  --post-call-buy: #4be39c;
+  --post-call-sell: #ff8a70;
+  --font-post-serif: var(--font-fraunces), Georgia, serif;
 }
 
 .dark {

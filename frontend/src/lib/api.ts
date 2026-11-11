@@ -10,6 +10,8 @@ import {
   signalsRequestSchema,
   signalsResponseSchema,
   latestJobSchema,
+  nextCallNoResponseSchema,
+  postsListResponseSchema,
   signalCellSchema,
   signalMatrixResponseSchema,
   type CoverageRowsResponse,
@@ -19,6 +21,8 @@ import {
   type Instrument,
   type LatestJob,
   type MetaDefaults,
+  type NextCallNoResponse,
+  type PostsListResponse,
   type SecurityInput,
   type SignalCell,
   type SignalMatrixResponse,
@@ -241,6 +245,41 @@ export async function patchSignalStatus(
     );
   }
   return signalCellSchema.parse(data);
+}
+
+export async function fetchPosts(): Promise<PostsListResponse> {
+  const res = await fetch(`${getApiBaseUrl()}/api/posts/`);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(errorMessage(data, `Could not load posts (${res.status})`));
+  }
+  return postsListResponseSchema.parse(data);
+}
+
+export async function fetchNextCallNo(): Promise<NextCallNoResponse> {
+  const res = await fetch(`${getApiBaseUrl()}/api/posts/next-call-no`);
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(
+      errorMessage(data, `Could not load next call number (${res.status})`)
+    );
+  }
+  return nextCallNoResponseSchema.parse(data);
+}
+
+export async function deletePost(id: string): Promise<void> {
+  const res = await fetch(
+    `${getApiBaseUrl()}/api/posts/${encodeURIComponent(id)}`,
+    { method: "DELETE" }
+  );
+  if (res.status === 204) return;
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error(errorMessage(data, `Could not delete post (${res.status})`));
+  }
+  if (data && typeof data === "object" && "ok" in data && data.ok === true) {
+    return;
+  }
 }
 
 export async function postSignals(

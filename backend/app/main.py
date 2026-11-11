@@ -18,7 +18,17 @@ if str(BACKEND_ROOT) not in sys.path:
 load_dotenv(BACKEND_ROOT / ".env")
 load_dotenv(BACKEND_ROOT.parent / ".env")
 
-from app.api import coverage, health, indices, instruments, jobs, meta, signal_review, signals  # noqa: E402
+from app.api import (  # noqa: E402
+    coverage,
+    health,
+    indices,
+    instruments,
+    jobs,
+    meta,
+    posts,
+    signal_review,
+    signals,
+)
 from src.instruments import load_nse_equity_instruments  # noqa: E402
 from src.token_manager import get_valid_access_token  # noqa: E402
 
@@ -58,3 +68,4 @@ app.include_router(signals.router)
 app.include_router(coverage.router)
 app.include_router(jobs.router)
 app.include_router(signal_review.router)
+app.include_router(posts.router)

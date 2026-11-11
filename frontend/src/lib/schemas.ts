@@ -276,3 +276,42 @@ export const REVIEW_TIMEFRAMES: {
   { id: "4h", label: "4 Hour", horizon: "3–10 days" },
   { id: "1d", label: "1 Day", horizon: "2–6 weeks" },
 ];
+
+export const postItemSchema = z.object({
+  id: z.string(),
+  call_no: z.number(),
+  market: z.string(),
+  security_id: z.string(),
+  timeframe: z.string(),
+  symbol: z.string(),
+  side: z.string(),
+  display_name: z.string(),
+  exchange_segment: z.string(),
+  currency: z.string(),
+  price: z.number().nullable(),
+  change_pct: z.number().nullable(),
+  published_at: z.string(),
+  views: z.number(),
+  likes: z.number(),
+  comments: z.number(),
+});
+export type PostItem = z.infer<typeof postItemSchema>;
+
+export const postsTotalsSchema = z.object({
+  count: z.number(),
+  views: z.number(),
+  likes: z.number(),
+  comments: z.number(),
+});
+export type PostsTotals = z.infer<typeof postsTotalsSchema>;
+
+export const postsListResponseSchema = z.object({
+  posts: z.array(postItemSchema),
+  totals: postsTotalsSchema,
+});
+export type PostsListResponse = z.infer<typeof postsListResponseSchema>;
+
+export const nextCallNoResponseSchema = z.object({
+  next_call_no: z.number(),
+});
+export type NextCallNoResponse = z.infer<typeof nextCallNoResponseSchema>;

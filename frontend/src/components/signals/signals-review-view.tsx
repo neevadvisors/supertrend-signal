@@ -13,12 +13,16 @@ import {
   Send,
   Undo2,
 } from "lucide-react";
+import { InstagramPost } from "@/components/posts/instagram-post";
+import type { PostArtworkInput } from "@/components/posts/post-types";
 import { SignalsReviewSkeleton } from "@/components/signals/signals-review-skeleton";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
   fetchCoverage,
   fetchIndicesCatalog,
+  fetchNextCallNo,
+  fetchPosts,
   fetchSignalMatrix,
   patchSignalStatus,
 } from "@/lib/api";
@@ -64,6 +68,24 @@ function stockKey(securityId: string, market: string = "IN") {
 
 function tfLabel(tf: ReviewTimeframe): string {
   return REVIEW_TIMEFRAMES.find((t) => t.id === tf)?.label ?? tf;
+}
+
+function reviewArtwork(
+  cell: SignalCell,
+  stock: MatrixStock,
+  callNo: number
+): PostArtworkInput {
+  const side = cell.side === "SELL" ? "SELL" : "BUY";
+  return {
+    callNo,
+    side,
+    symbol: cell.symbol,
+    name: stock.display_name,
+    exchange: stock.exchange_segment,
+    price: stock.ltp ?? cell.entry,
+    changePct: stock.change_pct ?? null,
+    market: cell.market ?? "IN",
+  };
 }
 
 function SidePill({ side, size = "md" }: { side: string; size?: "sm" | "md" }) {
@@ -182,6 +204,8 @@ export function SignalsReviewView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [nextCallNo, setNextCallNo] = useState<number>(1);
+  const [callNoByKey, setCallNoByKey] = useState<Record<string, number>>({});
 
   const [view, setView] = useState<View>("review");
   const [source, setSource] = useState<SourceFilter>("ALL");
@@ -252,11 +276,19 @@ export function SignalsReviewView() {
   const load = async () => {
     setError(null);
     try {
-      const [matrix, cov, catalog] = await Promise.all([
+      const [matrix, cov, catalog, nextCall, posts] = await Promise.all([
         fetchSignalMatrix(),
         fetchCoverage(),
         fetchIndicesCatalog(),
+        fetchNextCallNo(),
+        fetchPosts(),
       ]);
+      setNextCallNo(nextCall.next_call_no);
+      const callMap: Record<string, number> = {};
+      for (const p of posts.posts) {
+        callMap[cellKey(p.security_id, p.timeframe, p.market)] = p.call_no;
+      }
+      setCallNoByKey(callMap);
       setData(matrix);
       setCoverage(cov);
       setIndexCatalog(catalog.indices);
@@ -348,6 +380,55 @@ export function SignalsReviewView() {
       applyCellPatch(patched);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Revert failed");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!selectedCell || !selectedKey) return;
+    setActionLoading(true);
+    const usedCallNo = nextCallNo;
+    try {
+      const patched = await patchSignalStatus(
+        selectedCell.security_id,
+        selectedCell.timeframe,
+        "approved",
+        selectedCell.market ?? "IN"
+      );
+      applyCellPatch(patched);
+      setCallNoByKey((prev) => ({ ...prev, [selectedKey]: usedCallNo }));
+      const nextCall = await fetchNextCallNo();
+      setNextCallNo(nextCall.next_call_no);
+      const n = nextPendingKey(selectedKey);
+      if (n) setSelectedKey(n);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Approve failed");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUnpublish = async () => {
+    if (!selectedCell || !selectedKey) return;
+    setActionLoading(true);
+    try {
+      const patched = await patchSignalStatus(
+        selectedCell.security_id,
+        selectedCell.timeframe,
+        "pending",
+        selectedCell.market ?? "IN"
+      );
+      applyCellPatch(patched);
+      setCallNoByKey((prev) => {
+        const next = { ...prev };
+        delete next[selectedKey];
+        return next;
+      });
+      const nextCall = await fetchNextCallNo();
+      setNextCallNo(nextCall.next_call_no);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unpublish failed");
     } finally {
       setActionLoading(false);
     }
@@ -537,6 +618,13 @@ export function SignalsReviewView() {
               }
               onSkip={handleSkip}
               onRevert={handleRevert}
+              onApprove={handleApprove}
+              onUnpublish={handleUnpublish}
+              nextCallNo={
+                selectedCell.status === "approved" && selectedKey
+                  ? (callNoByKey[selectedKey] ?? nextCallNo)
+                  : nextCallNo
+              }
               loading={actionLoading}
               onNext={() => {
                 const n = selectedKey ? nextPendingKey(selectedKey) : null;
@@ -702,6 +790,9 @@ function ReviewPanel({
   onPick,
   onSkip,
   onRevert,
+  onApprove,
+  onUnpublish,
+  nextCallNo,
   loading,
   onNext,
   hasNext,
@@ -712,6 +803,9 @@ function ReviewPanel({
   onPick: (c: SignalCell) => void;
   onSkip: () => void;
   onRevert: () => void;
+  onApprove: () => void;
+  onUnpublish: () => void;
+  nextCallNo: number;
   loading: boolean;
   onNext: () => void;
   hasNext: boolean;
@@ -799,6 +893,18 @@ function ReviewPanel({
                 {cell.note}
               </p>
             </div>
+
+            <div className="mt-5 border-t border-[var(--ds-border)] pt-4">
+              <div className="text-xs font-medium text-[var(--ds-text)]">
+                Instagram post preview
+              </div>
+              <p className="mt-0.5 text-xs text-[var(--ds-muted)]">
+                How it lands in the feed
+              </p>
+              <div className="mt-3 max-w-[320px]">
+                <InstagramPost artwork={reviewArtwork(cell, stock, nextCallNo)} />
+              </div>
+            </div>
           </div>
 
           <div className="sticky bottom-0 mt-auto border-t border-[var(--ds-border)] bg-[var(--ds-surface)] px-6 py-4">
@@ -822,23 +928,44 @@ function ReviewPanel({
                   type="button"
                   size="sm"
                   className="flex-1"
-                  disabled
-                  title="Approve & post — coming soon"
+                  disabled={loading}
+                  onClick={onApprove}
                 >
-                  <Send className="size-3.5" /> Approve & post to Instagram
+                  {loading ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Send className="size-3.5" />
+                  )}
+                  Approve & post to Instagram
                 </Button>
               </div>
             ) : null}
             {cell.status === "approved" ? (
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--ds-buy)]">
-                  <Check size={15} strokeWidth={2.5} /> Approved
+                  <Check size={15} strokeWidth={2.5} /> Posted
                 </span>
-                {hasNext ? (
-                  <Button type="button" size="sm" onClick={onNext}>
-                    Next
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={loading}
+                    onClick={onUnpublish}
+                  >
+                    {loading ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Undo2 className="size-3.5" />
+                    )}
+                    Unpublish
                   </Button>
-                ) : null}
+                  {hasNext ? (
+                    <Button type="button" size="sm" onClick={onNext}>
+                      Next
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             ) : null}
             {cell.status === "skipped" ? (

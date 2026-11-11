@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, Numeric, String, Text, func
+from sqlalchemy import Date, DateTime, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -77,3 +77,26 @@ class SignalRun(Base):
     symbol_count: Mapped[int] = mapped_column(default=0)
     error_count: Mapped[int] = mapped_column(default=0)
     trigger: Mapped[str] = mapped_column(String(16))
+
+
+class PublishedPost(Base):
+    __tablename__ = "published_posts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    call_no: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    market: Mapped[str] = mapped_column(String(2), nullable=False)
+    security_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    timeframe: Mapped[str] = mapped_column(String(8), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(64), nullable=False)
+    side: Mapped[str] = mapped_column(String(8), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    exchange_segment: Mapped[str] = mapped_column(String(32), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
+    price: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    change_pct: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    published_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    views: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    likes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    comments: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
