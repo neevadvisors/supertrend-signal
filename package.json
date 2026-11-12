@@ -1,5 +1,5 @@
 {
-  "name": "dhan-signals",
+  "name": "neev-signals",
   "private": true,
   "scripts": {
     "start": "concurrently -k -n stack,web -c cyan,magenta \"docker compose up --build\" \"npm run wait:api && npm run dev:web\"",

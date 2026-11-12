@@ -76,7 +76,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-[var(--ds-bg)] p-4 text-[var(--ds-text)]">
       <Card className="w-full max-w-sm border-[var(--ds-border)] bg-[var(--ds-surface)]">
         <CardHeader>
-          <CardTitle>Dhan Signals</CardTitle>
+          <CardTitle>Neev Signals</CardTitle>
           <CardDescription className="text-[var(--ds-muted)]">
             Sign in to continue
           </CardDescription>

@@ -29,7 +29,7 @@ export function DashboardHeader({
     <header className="sticky top-0 z-40 -mx-4 flex h-14 items-center justify-between gap-3 border-b border-[var(--ds-border)] bg-[var(--ds-bg)]/85 px-4 backdrop-blur-md md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
       <div className="min-w-0">
         <h1 className="truncate text-lg font-semibold tracking-tight md:text-xl">
-          Dhan Signals
+          Neev Signals
         </h1>
         <p className="hidden text-xs text-[var(--ds-muted)] sm:block">
           NEEV AI Renko Supertrend

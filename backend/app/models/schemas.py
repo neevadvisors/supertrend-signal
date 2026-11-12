@@ -1,4 +1,4 @@
-"""Pydantic request/response schemas for the Dhan Signals API."""
+"""Pydantic request/response schemas for the Neev Signals API."""
 
 from __future__ import annotations
 

@@ -32,7 +32,7 @@ from app.api import (  # noqa: E402
 from src.instruments import load_nse_equity_instruments  # noqa: E402
 from src.token_manager import get_valid_access_token  # noqa: E402
 
-app = FastAPI(title="Dhan Signals API", version="1.0.0")
+app = FastAPI(title="Neev Signals API", version="1.0.0")
 
 
 @app.on_event("startup")

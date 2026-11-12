@@ -1,4 +1,4 @@
-# Dhan Signals
+# Neev Signals
 
 Monorepo for NSE equity **NEEV AI Renko Supertrend** signals: FastAPI backend + Next.js frontend.
 
@@ -7,7 +7,7 @@ Search and multi-select NSE equities, fetch intraday candles from Dhan (15m, 1h,
 ## Structure
 
 ```
-dhan-signals/
+neev-signals/
 ├── backend/          # FastAPI API (uvicorn)
 │   ├── app/          # routes, schemas, services
 │   ├── src/          # domain: Dhan client, indicators, signals, instruments
@@ -21,7 +21,7 @@ dhan-signals/
 One-time:
 
 ```bash
-cd ~/Documents/dhan-signals
+cd ~/Documents/neev-signals
 python3 -m venv .venv
 source .venv/bin/activate
 npm install                    # root helper (concurrently)

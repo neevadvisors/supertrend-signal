@@ -3,7 +3,7 @@
 # `python scripts/run_coverage_signals.py --market IN|US|ALL`
 services:
   - type: web
-    name: dhan-signals-api
+    name: neev-signals-api
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt

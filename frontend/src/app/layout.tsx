@@ -18,7 +18,7 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Dhan Signals",
+  title: "Neev Signals",
   description: "NEEV AI Renko Supertrend — 15m, 1h, 4h",
 };
 

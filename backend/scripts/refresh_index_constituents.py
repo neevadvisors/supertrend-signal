@@ -43,7 +43,7 @@ INDEX_SOURCES: dict[str, dict] = {
     },
 }
 
-USER_AGENT = "Mozilla/5.0 (compatible; dhan-signals/1.0)"
+USER_AGENT = "Mozilla/5.0 (compatible; neev-signals/1.0)"
 
 
 def fetch_csv(url: str) -> str:
