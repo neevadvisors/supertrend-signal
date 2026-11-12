@@ -4,7 +4,8 @@ export const SESSION_MAX_AGE_SEC = 7 * 24 * 60 * 60;
 export const sessionCookieOptions = {
   name: SESSION_COOKIE_NAME,
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
+  // v1 serves plain HTTP (EIP:80). Set AUTH_COOKIE_SECURE=true after HTTPS.
+  secure: process.env.AUTH_COOKIE_SECURE === "true",
   sameSite: "lax" as const,
   path: "/",
   maxAge: SESSION_MAX_AGE_SEC,

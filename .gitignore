@@ -35,3 +35,16 @@ backend/data/dhan_token.json
 .DS_Store
 .idea/
 .vscode/
+
+# Terraform (local state/secrets; commit .terraform.lock.hcl)
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/terraform.tfvars
+infra/terraform/tfplan
+infra/terraform/*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

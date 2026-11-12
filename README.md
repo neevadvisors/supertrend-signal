@@ -8,12 +8,15 @@ Search and multi-select NSE equities, fetch intraday candles from Dhan (15m, 1h,
 
 ```
 neev-signals/
-├── backend/          # FastAPI API (uvicorn)
-│   ├── app/          # routes, schemas, services
-│   ├── src/          # domain: Dhan client, indicators, signals, instruments
-│   └── data/         # cached security master CSV
-├── frontend/         # Next.js 15 UI
-└── render.yaml       # Render deploy for the API
+├── backend/                 # FastAPI API (uvicorn)
+│   ├── app/                 # routes, schemas, services
+│   ├── src/                 # domain: Dhan client, indicators, signals, instruments
+│   └── data/                # cached security master CSV
+├── frontend/                # Next.js 15 UI
+├── deploy/                  # nginx.conf + deploy.sh (on-box app releases)
+├── infra/terraform/         # EC2 + EIP + RDS + security groups
+├── docker-compose.yml       # local stack (Postgres + bind mounts)
+└── docker-compose.aws.yml   # AWS stack (RDS external; nginx on :80)
 ```
 
 ## Local setup
@@ -60,30 +63,32 @@ npm run dev:web   # frontend only
 | `backend/.env` or root `.env` | `DHAN_TOTP_SECRET` | TOTP secret from Dhan Web setup |
 | `backend/.env` or root `.env` | `DHAN_ACCESS_TOKEN` | Optional bootstrap JWT until first auto-mint |
 | `backend/.env` or root `.env` | `CORS_ORIGINS` | Comma-separated allowed origins (default `http://localhost:3000`) |
-| `frontend/.env.local` | `NEXT_PUBLIC_API_URL` | Backend base URL (default `http://localhost:8000`) |
-| `frontend/.env.local` | `AUTH_USERNAME` | Login username (server-only) |
-| `frontend/.env.local` | `AUTH_PASSWORD` | Login password (server-only) |
-| `frontend/.env.local` | `AUTH_SECRET` | Secret for signing session cookies (server-only) |
+| `frontend/.env.local` (local) or `frontend/.env` (AWS) | `NEXT_PUBLIC_API_URL` | API base URL (local default `http://localhost:8000`; on AWS set at **image build** via Compose) |
+| `frontend/.env.local` / `frontend/.env` | `AUTH_USERNAME` | Login username (server-only) |
+| `frontend/.env.local` / `frontend/.env` | `AUTH_PASSWORD` | Login password (server-only) |
+| `frontend/.env.local` / `frontend/.env` | `AUTH_SECRET` | Secret for signing session cookies (server-only) |
 
-## Deploy
+## Deploy (AWS)
 
-### API — Render
+v1 runs **api + worker + frontend + Nginx** on one EC2 instance, with **private RDS Postgres**, in `ap-south-1`. Terraform owns infra; [`deploy/deploy.sh`](deploy/deploy.sh) owns app releases.
 
-`render.yaml` at the repo root configures a Python web service with `rootDir: backend`.
+**Full runbook:** [`docs/aws-deploy.md`](docs/aws-deploy.md) (prereqs, apply, first deploy, verify, teardown, troubleshooting).  
+**Later hardening / HTTPS:** [`docs/aws-ec2-hardening-followup.md`](docs/aws-ec2-hardening-followup.md).
 
-Set env vars in the Render dashboard:
+Short path:
 
-- `DHAN_CLIENT_ID`
-- `DHAN_PIN`
-- `DHAN_TOTP_SECRET`
-- `DHAN_ACCESS_TOKEN` (optional bootstrap)
-- `CORS_ORIGINS` — your Vercel frontend origin(s), e.g. `https://your-app.vercel.app`
+```bash
+# laptop
+cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars   # fill ssh_public_key_path, admin_cidr, db_password
+terraform init && terraform plan -out tfplan && terraform apply tfplan
+terraform output
 
-### Frontend — Vercel
-
-- **Root Directory:** `frontend`
-- **Env:** `NEXT_PUBLIC_API_URL` = your Render API URL (no trailing slash)
-- **Env:** `AUTH_USERNAME`, `AUTH_PASSWORD`, `AUTH_SECRET` (server-only login gate)
+# on EC2 (after cloud-init / user_data finishes)
+# clone repo into /opt/neev-signals, write backend/.env + frontend/.env, then:
+./deploy/deploy.sh
+curl -fsS http://<ElasticIP>/health
+```
 
 ## Timeframes
 
