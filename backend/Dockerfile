@@ -11,7 +11,7 @@ RUN apt-get update \
          *) echo "unsupported arch: $TARGETARCH" >&2; exit 1 ;; \
        esac \
     && curl -fsSL -o /usr/local/bin/supercronic \
-        "https://github.com/aptible/supercronic/releases/download/v0.2.33/supercronic-linux-${SUPERCRONIC_ARCH}" \
+        "https://github.com/aptible/supercronic/releases/download/v0.2.36/supercronic-linux-${SUPERCRONIC_ARCH}" \
     && chmod +x /usr/local/bin/supercronic \
     && rm -rf /var/lib/apt/lists/*
 

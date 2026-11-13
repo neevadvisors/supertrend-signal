@@ -42,6 +42,12 @@ Because the frontend is on AWS too, mixed content is not a v1 blocker. Add TLS w
 ### Builds / images (optional)
 - Build on laptop/CI → push **ECR** → EC2 pulls by tag (avoids OOM on micro; easier rollback)
 
+### Dev toolchain (Node / lockfile)
+- Standardize **local frontend Node on 20.x** (nvm/fnm), matching `frontend/Dockerfile` (`node:20-…`)
+- Add `engines` to `frontend/package.json` (e.g. `"node": ">=20 <21"`) and document in README
+- Keep committing `frontend/package-lock.json`; refresh it with Node 20 when adding deps so Docker `npm ci` stays green
+- Optional: CI check that `npm ci` passes under Node 20 before merge
+
 ### Ops hygiene
 - Root volume gp3 20–30GB
 - Docker log rotation + periodic `docker image prune`
@@ -58,6 +64,7 @@ Because the frontend is on AWS too, mixed content is not a v1 blocker. Add TLS w
 - [ ] Secrets in SSM SecureString
 - [ ] Optional ECR image flow
 - [ ] Log rotation / prune / recover alarm / TZ / restart policies
+- [ ] Local Node 20 + `engines` + lockfile workflow aligned with Docker `npm ci`
 
 ## Still later (not this follow-up)
 

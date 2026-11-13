@@ -10,7 +10,9 @@ case "$1" in
     exec uvicorn app.main:app --host 0.0.0.0 --port 8000
     ;;
   worker)
-    exec supercronic /app/crontab
+    # Absolute path required: supercronic's reaper re-execs argv[0] relative to cwd
+    # (see aptible/supercronic#177 / #181; fixed in v0.2.36+).
+    exec /usr/local/bin/supercronic /app/crontab
     ;;
   job)
     shift
